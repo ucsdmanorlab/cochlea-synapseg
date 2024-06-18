@@ -1,0 +1,57 @@
+name: cochlea-synapse-seg
+display_name: Cochlear Synapse Segmentation
+# use 'hidden' to remove plugin from napari hub search results
+visibility: public
+# see https://napari.org/stable/plugins/manifest.html for valid categories
+categories: ["Annotation", "Segmentation", "Acquisition"]
+contributions:
+  commands:
+    - id: cochlea-synapse-seg.get_reader
+      python_name: napari_cochlea_synapse_seg._reader:napari_get_reader
+      title: Open data with Cochlear Synapse Segmentation
+    - id: cochlea-synapse-seg.write_multiple
+      python_name: napari_cochlea_synapse_seg._writer:write_multiple
+      title: Save multi-layer data with Cochlear Synapse Segmentation
+    - id: cochlea-synapse-seg.write_single_image
+      python_name: napari_cochlea_synapse_seg._writer:write_single_image
+      title: Save image data with Cochlear Synapse Segmentation
+    - id: cochlea-synapse-seg.make_sample_data
+      python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data
+      title: Load sample data from Cochlear Synapse Segmentation
+    - id: cochlea-synapse-seg.make_container_widget
+      python_name: napari_cochlea_synapse_seg:ImageThreshold
+      title: Make threshold Container widget
+    - id: cochlea-synapse-seg.make_magic_widget
+      python_name: napari_cochlea_synapse_seg:threshold_magic_widget
+      title: Make threshold magic widget
+    - id: cochlea-synapse-seg.make_function_widget
+      python_name: napari_cochlea_synapse_seg:threshold_autogenerate_widget
+      title: Make threshold function widget
+    - id: cochlea-synapse-seg.make_qwidget
+      python_name: napari_cochlea_synapse_seg:ExampleQWidget
+      title: Make example QWidget
+  readers:
+    - command: cochlea-synapse-seg.get_reader
+      accepts_directories: false
+      filename_patterns: ['*.npy']
+  writers:
+    - command: cochlea-synapse-seg.write_multiple
+      layer_types: ['image*','labels*']
+      filename_extensions: []
+    - command: cochlea-synapse-seg.write_single_image
+      layer_types: ['image']
+      filename_extensions: ['.npy']
+  sample_data:
+    - command: cochlea-synapse-seg.make_sample_data
+      display_name: Cochlear Synapse Segmentation
+      key: unique_id.1
+  widgets:
+    - command: cochlea-synapse-seg.make_container_widget
+      display_name: Container Threshold
+    - command: cochlea-synapse-seg.make_magic_widget
+      display_name: Magic Threshold
+    - command: cochlea-synapse-seg.make_function_widget
+      autogenerate: true
+      display_name: Autogenerate Threshold
+    - command: cochlea-synapse-seg.make_qwidget
+      display_name: Example QWidget
