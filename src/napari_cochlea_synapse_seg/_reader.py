@@ -6,7 +6,7 @@ implement multiple readers or even other plugin contributions. see:
 https://napari.org/stable/plugins/guides.html?#readers
 """
 import numpy as np
-
+import zarr
 
 def napari_get_reader(path):
     """A basic implementation of a Reader contribution.
@@ -29,14 +29,16 @@ def napari_get_reader(path):
         path = path[0]
 
     # if we know we cannot read the file, we immediately return None.
-    if not path.endswith(".npy"):
+    # otherwise we return the *function* that can read ``path``.
+    if isinstance(path, str) and path.endswith(".zarr"):
+        return zarr_reader_function
+    elif path.endswith(".npy"):
+        return npy_reader_function
+    else:
         return None
 
-    # otherwise we return the *function* that can read ``path``.
-    return reader_function
 
-
-def reader_function(path):
+def npy_reader_function(path):
     """Take a path or list of paths and return a list of LayerData tuples.
 
     Readers are expected to return data as a list of tuples, where each tuple
@@ -70,3 +72,36 @@ def reader_function(path):
 
     layer_type = "image"  # optional, default is "image"
     return [(data, add_kwargs, layer_type)]
+
+
+def zarr_reader_function(path):
+    """Take a path and return a list of LayerData tuples.
+
+    Readers are expected to return data as a list of tuples, where each tuple
+    is (data, [add_kwargs, [layer_type]]), "add_kwargs" and "layer_type" are
+    both optional.
+
+    Parameters
+    ----------
+    path : str
+        Path to file.
+
+    Returns
+    -------
+    layer_data : list of tuples
+        A list of LayerData tuples where each tuple in the list contains
+        (data, metadata, layer_type), where data is a numpy array, metadata is
+        a dict of keyword arguments for the corresponding viewer.add_* method
+        in napari, and layer_type is a lower-case string naming the type of
+        layer. Both "meta", and "layer_type" are optional. napari will
+        default to layer_type=="image" if not provided
+    """
+    # optional kwargs for the corresponding viewer.add_* method
+    img_kwargs = {}
+    label_kwargs = {}
+
+    zarr_fi = zarr.open(path)
+    img = (zarr_fi['3d/raw'], img_kwargs, "image")
+    labels = (zarr_fi['3d/labeled'].astype(int)[:], label_kwargs, "labels")
+
+    return [img, labels]
