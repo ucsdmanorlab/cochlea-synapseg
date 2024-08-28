@@ -18,18 +18,9 @@ contributions:
     - id: cochlea-synapse-seg.make_sample_data
       python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data
       title: Load sample data from Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.make_container_widget
-      python_name: napari_cochlea_synapse_seg:ImageThreshold
-      title: Make threshold Container widget
-    - id: cochlea-synapse-seg.make_magic_widget
-      python_name: napari_cochlea_synapse_seg:threshold_magic_widget
-      title: Make threshold magic widget
-    - id: cochlea-synapse-seg.make_function_widget
-      python_name: napari_cochlea_synapse_seg:threshold_autogenerate_widget
-      title: Make threshold function widget
     - id: cochlea-synapse-seg.make_qwidget
-      python_name: napari_cochlea_synapse_seg:ExampleQWidget
-      title: Make example QWidget
+      python_name: napari_cochlea_synapse_seg:GTWidget
+      title: Make GTWidget
   readers:
     - command: cochlea-synapse-seg.get_reader
       accepts_directories: false
@@ -46,12 +37,5 @@ contributions:
       display_name: Cochlear Synapse Segmentation
       key: unique_id.1
   widgets:
-    - command: cochlea-synapse-seg.make_container_widget
-      display_name: Container Threshold
-    - command: cochlea-synapse-seg.make_magic_widget
-      display_name: Magic Threshold
-    - command: cochlea-synapse-seg.make_function_widget
-      autogenerate: true
-      display_name: Autogenerate Threshold
     - command: cochlea-synapse-seg.make_qwidget
-      display_name: Example QWidget
+      display_name: Ground Truth Widget
