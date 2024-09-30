@@ -27,7 +27,7 @@ You can install `cochlea-synapse-seg` via [pip]:
 
     pip install cochlea-synapse-seg
 
-
+(this is not yet true, just clone repo and use "pip install -e ." for now)
 
 
 ## Contributing
