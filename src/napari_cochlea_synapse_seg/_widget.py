@@ -30,7 +30,7 @@ Replace code below according to your needs.
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox
+from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
@@ -45,6 +45,63 @@ if TYPE_CHECKING:
 
 from napari_builtins.io._read import magic_imread
 
+class PointWidget(QWidget):
+    def __init__(self, viewer: "napari.viewer.Viewer"):
+        super().__init__()
+        self.viewer = viewer
+        self.setLayout(QVBoxLayout())
+
+        # Data loader box
+        box1 = QGroupBox('Load point data')
+        cellcounter = QPushButton("cell counter rois")
+        imagejpoints = QPushButton("ImageJ point rois")
+        csvcoords = QPushButton("csv coordinates")
+
+        cellcounter.clicked.connect(self._load_cell_counter)
+        imagejpoints.clicked.connect(self._load_imagej_roi)
+        csvcoords.clicked.connect(self._load_csv)
+
+        gbox1 = QVBoxLayout()
+        gbox1.addWidget(cellcounter)
+        gbox1.addWidget(imagejpoints)
+        gbox1.addWidget(csvcoords)
+        
+        box1.setLayout(gbox1)
+        
+        self.layout().addWidget(box1) 
+
+    def _load_cell_counter(self):
+        self.file_path = QFileDialog.getOpenFileName(
+                self,
+                caption="Choose cell counter .xml",
+                )
+        print(self.file_path)
+
+        
+
+        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
+        #self.
+        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
+
+        self.viewer.dims.ndisplay = 3
+        n = len(self.viewer.layers)
+        self.viewer.add_layer(image)
+        self.viewer.layers[n].reset_contrast_limits()
+        self.viewer.add_layer(labels)
+        self.viewer.layers[n+1].brush_size=4
+
+        if self.labels_editable:
+            self._convert_dask(self.viewer.layers[n+1].name)
+        return
+    def _load_imagej_roi(self):
+        return
+    def _load_csv(self):
+        return
+        
+        
+        
+        
+
 class GTWidget(QWidget):
     # your QWidget.__init__ can optionally request the napari viewer instance
     # use a type annotation of 'napari.viewer.Viewer' for any parameter
@@ -53,103 +110,119 @@ class GTWidget(QWidget):
         self.viewer = viewer
         self.setLayout(QVBoxLayout())
         self.file_path = ''
+        self.labels_editable = False
 
         # Data loader box
         box1 = QGroupBox('Load data')
         
         zarrbtn = QPushButton("Load zarr")
-        imgcombo = QComboBox(); 
-        labcombo = QComboBox();
-        refreshbtn = QPushButton("Refresh")
+        imgcombo = QComboBox() 
+        labcombo = QComboBox()
+        img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
+        lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
+        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
+        lab2_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
+ 
+        self.labcheck = QCheckBox("Make labels editable")
+        self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
 
         zarrbtn.clicked.connect(self._choose_zarr)
-        zarrbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image'))
-        zarrbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels'))
+        zarrbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image', set_index=-1))
+        zarrbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels', set_index=-1))
 
-        imgcombo.activated.connect(lambda: self._update_combos(imgcombo, 'Image'))
-        imgcombo.currentTextChanged.connect(self._set_active_image)
-        labcombo.activated.connect(lambda: self._update_combos(labcombo, 'Labels'))
+        #imgcombo.activated.connect(lambda: self._update_combos(imgcombo, 'Image'))
+        imgcombo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_image'))
+        #labcombo.activated.connect(lambda: self._update_combos(labcombo, 'Labels'))
         labcombo.currentTextChanged.connect(self._set_active_label)
-
-        refreshbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image'))
-        refreshbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels'))
-
+        self.labcheck.stateChanged.connect(self._set_editable)
+        img_refreshbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image'))
+        lab_refreshbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels'))
+        
         # Editor box
         box2 = QGroupBox('Point editor')
         
         ptsbtn = QPushButton("New points layer")
         ptscombo = QComboBox()
-        p2mbtn = QPushButton("Auto-adjust points z")
+        rxybtn = QPushButton("Rotate to xy")
+        p2mbtn = QPushButton("Auto-adjust z")
         zbox = QSpinBox()
         zbox.setMinimum(0)
         zbox.setMaximum(50)#self.zmax)
         p2lbtn = QPushButton("Points to labels")
-        advbtn = QPushButton("Advanced settings")
-        
+        l2pbtn = QPushButton("Labels to points")
+        advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
+        snapbtn = QPushButton("Snap to max")
+        chbox = QSpinBox(); self.nch=1;  
+        ch2zbtn = QPushButton("Channel to z conversion")
+        ch2zbtn.clicked.connect(self._convert_ch2z)
+        pts_refreshbtn.clicked.connect(lambda: self._update_combos(ptscombo, 'Points'))
         
         box3 = QGroupBox('Label editor')
         lab2combo = QComboBox(); 
         mlsbtn = QPushButton("Merge labels")
-        labelbox = QSpinBox(); self.rem_label = 1
-        self._setup_spin(labelbox, minval=1, maxval=1000, val=self.rem_label)
-        labcombo.currentTextChanged.connect(lambda: labelbox.setMaximum(
-            self.viewer.layers[self.active_label].data.max()))
+        self.labelbox = QSpinBox(); self.rem_label = 1
+        labcombo.currentTextChanged.connect(self._set_max_label)
         removebtn = QPushButton("Remove label")
-        maxlab = QLabel("max label: ")
-        reflabbtn = QPushButton("Refresh")
-        reflabbtn.clicked.connect(lambda: maxlab.setText("max label: "+str(self.viewer.layers[self.active_label].data.max())))
-        labcombo.currentTextChanged.connect(lambda: maxlab.setText("max label: "+str(self.viewer.layers[self.active_label].data.max())))
+        self.maxlab = QLabel("max label: ")
+        labn_refreshbtn = QPushButton("\u27F3"); labn_refreshbtn.setToolTip("Refresh")
+        labn_refreshbtn.clicked.connect(self._set_max_label)
         savebtn = QPushButton("Save zarr")
-
+        
         # Advanced settings
         self.rad_xy = 6
         self.rad_z = 4
         self.max_rad_xy = 2
         self.max_rad_z = 2
         self.snap_rad = 2
-        self.blur_sig = [0.5, 0.7, 0.7]
+        self.blur_sig_xy = 0.7
+        self.blur_sig_z = 0.5
 
         box2b = QGroupBox('Advanced settings')
         radxybox = QSpinBox(); 
-        self._setup_spin(radxybox, minval=1, suff=' px', val=self.rad_xy)
+        
         radzbox = QSpinBox(); 
-        self._setup_spin(radzbox, minval=1, suff=' px', val=self.rad_z)
         snapbox = QSpinBox(); 
-        self._setup_spin(snapbox, minval=0, suff=' px', val=self.snap_rad)
         mradxybox = QSpinBox() ; 
-        self._setup_spin(mradxybox, minval=1, suff=' px', val=self.max_rad_xy)
         mradzbox = QSpinBox(); 
-        self._setup_spin(mradzbox, minval=1, suff=' px', val=self.max_rad_z)
         sigxybox = QDoubleSpinBox(); 
-        self._setup_spin(sigxybox, minval=0, suff=' px', val=self.blur_sig[1], step=0.1)
         sigzbox = QDoubleSpinBox(); 
-        self._setup_spin(sigzbox, minval=0, suff=' px', val=self.blur_sig[0], step=0.1)
+        self._setup_spin(radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
+        self._setup_spin(radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
+        self._setup_spin(snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
+        self._setup_spin(mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
+        self._setup_spin(mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
+        self._setup_spin(sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
+        self._setup_spin(sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
+        self._setup_spin(chbox,     minval=1, maxval=10, val=self.nch, attrname='nch')
+        self._setup_spin(self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
 
         ptsbtn.clicked.connect(self._new_pts)
-        ptsbtn.clicked.connect(lambda: self._update_combos(ptscombo,'Points'))
-        ptsbtn.clicked.connect(lambda: ptscombo.setCurrentIndex(ptscombo.count()))
-        ptscombo.activated.connect(lambda: self._update_combos(ptscombo,'Points'))
-        ptscombo.currentTextChanged.connect(self._set_active_points)
+        ptsbtn.clicked.connect(lambda: self._update_combos(ptscombo,'Points', set_index=-1))
+        #ptsbtn.clicked.connect(lambda: ptscombo.setCurrentIndex(ptscombo.count()-1))
+        #ptscombo.activated.connect(lambda: self._update_combos(ptscombo,'Points'))
+        ptscombo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_points'))
         p2mbtn.clicked.connect(self._auto_z)
+        rxybtn.clicked.connect(self._rxy)
         zbox.valueChanged[int].connect(self._change_z)
         box2b.setVisible(False)
-        advbtn.clicked.connect(lambda: self._change_vis(box2b))
+        advbtn.toggled.connect(box2b.setVisible) #lambda: self._change_vis(box2b))
         p2lbtn.clicked.connect(self._points2labels)
-        p2lbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels'))
-        p2lbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(lab2combo.count()))
-        lab2combo.activated.connect(lambda: self._update_combos(lab2combo, 'Labels'))
-        lab2combo.currentTextChanged.connect(self._set_active_label2)
+        p2lbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels', set_index=-1))
+        #p2lbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(lab2combo.count()-1))
+        snapbtn.clicked.connect(self._snap_to_max)
+        #lab2combo.activated.connect(lambda: self._update_combos(lab2combo, 'Labels'))
+        lab2combo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_label2'))
+        lab2_refreshbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels'))
+    
         mlsbtn.clicked.connect(self._merge_labels)
-        mlsbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels'))
-        mlsbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(-1))
+        mlsbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels', set_index=-1))
+        #mlsbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(-1))
         savebtn.clicked.connect(self._save_in_place)
 
         removebtn.clicked.connect(self._remove_label)
-        labelbox.valueChanged[int].connect(self._set_rem_label)
-        # pts to labels
-        # secondary labels to merge
-        # merge labels
-        
+        l2pbtn.clicked.connect(self._labels2points)
+        l2pbtn.clicked.connect(lambda: self._update_combos(ptscombo, 'Points'))
+
         #self.setLayout(QHBoxLayout())
         
         self._update_combos(imgcombo, 'Image')
@@ -158,38 +231,53 @@ class GTWidget(QWidget):
         self._update_combos(lab2combo,'Labels')
 
         gbox = QGridLayout()
-        gbox.addWidget(zarrbtn, 0, 0, 1, 2)
+        gbox.addWidget(zarrbtn, 0, 0, 1, 3)
         gbox.addWidget(QLabel('image layer:'), 1, 0) ; gbox.addWidget(imgcombo, 1, 1)
-        gbox.addWidget(QLabel('labels layer:'), 2, 0) ; gbox.addWidget(labcombo, 2, 1)
-        gbox.addWidget(refreshbtn, 3, 1)
+        gbox.addWidget(img_refreshbtn, 1, 2)
+        #gbox.addWidget(QLabel('labels layer:'), 2, 0) ; gbox.addWidget(labcombo, 2, 1)
+        #gbox.addWidget(lab_refreshbtn, 2, 2)
+        #gbox.addWidget(labcheck, 3, 0)
+        #gbox.setColumnStretch(2, 1)
+        #gbox.setColumnStretch(0, 2)
+        #gbox.setColumnStretch(1, 3)
+        
         box1.setLayout(gbox)
         
         gbox2b = QGridLayout()
-        gbox2b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox2b.addWidget(radxybox, 0, 1); radxybox.valueChanged[int].connect(self._set_rad_xy)
-        gbox2b.addWidget(QLabel('threshold z rad:'), 1, 0); gbox2b.addWidget(radzbox, 1, 1); radzbox.valueChanged[int].connect(self._set_rad_z)
-        gbox2b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox2b.addWidget(snapbox, 2, 1); snapbox.valueChanged[int].connect(self._set_rad_snap)
-        gbox2b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox2b.addWidget(mradxybox, 3, 1); mradxybox.valueChanged[int].connect(self._set_mrad_xy)
-        gbox2b.addWidget(QLabel('local max z rad:'), 4, 0); gbox2b.addWidget(mradzbox, 4, 1); mradzbox.valueChanged[int].connect(self._set_mrad_z)
-        gbox2b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox2b.addWidget(sigxybox, 5, 1); sigxybox.valueChanged[float].connect(self._set_sig_xy)
-        gbox2b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox2b.addWidget(sigzbox, 6, 1); sigzbox.valueChanged[float].connect(self._set_sig_z)
+        gbox2b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox2b.addWidget(radxybox, 0, 1)
+        gbox2b.addWidget(QLabel('threshold z rad:'), 1, 0); gbox2b.addWidget(radzbox, 1, 1)
+        gbox2b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox2b.addWidget(snapbox, 2, 1)
+        gbox2b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox2b.addWidget(mradxybox, 3, 1)
+        gbox2b.addWidget(QLabel('local max z rad:'), 4, 0); gbox2b.addWidget(mradzbox, 4, 1)
+        gbox2b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox2b.addWidget(sigxybox, 5, 1)
+        gbox2b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox2b.addWidget(sigzbox, 6, 1)
 
         gbox2 = QGridLayout()
-        gbox2.addWidget(ptsbtn, 0, 0, 1, 2)
+        gbox2.addWidget(ptsbtn, 0, 0, 1, 3)
         gbox2.addWidget(QLabel('points layer:'), 1, 0) ; gbox2.addWidget(ptscombo, 1, 1)
-        gbox2.addWidget(p2mbtn, 2, 0, 1, 2)
+        gbox2.addWidget(pts_refreshbtn, 1, 2)
+        gbox2.addWidget(rxybtn, 2, 0, 1, 1)
+        gbox2.addWidget(p2mbtn, 2, 1, 1, 2)
         gbox2.addWidget(QLabel('manually edit z:'), 3, 0)
         gbox2.addWidget(zbox, 3, 1)
-        gbox2.addWidget(p2lbtn, 4, 0, 1, 2) ; 
-        gbox2.addWidget(advbtn, 6, 0, 1, 2)
-        gbox2.addWidget(box2b, 7, 0, 1, 2)
+        gbox2.addWidget(snapbtn, 4, 1, 1, 3)  
+        gbox2.addWidget(p2lbtn, 5, 0, 1, 3)  
+        gbox2.addWidget(advbtn, 6, 0, 1, 3)
+        gbox2.addWidget(box2b, 7, 0, 1, 3)
+        gbox2.addWidget(chbox, 8, 0)
+        gbox2.addWidget(ch2zbtn, 8, 1, 1, 2)
 
         gbox3 = QGridLayout()
-        gbox3.addWidget(QLabel('merge labels:'), 0, 0); gbox3.addWidget(lab2combo, 0,1)
-        gbox3.addWidget(mlsbtn, 1, 0, 1, 2)
-        gbox3.addWidget(labelbox, 2, 0)
+        gbox3.addWidget(QLabel('labels layer:'), 0, 0) ; gbox3.addWidget(labcombo, 0, 1)
+        gbox3.addWidget(lab_refreshbtn, 0, 2)
+        gbox3.addWidget(self.labcheck, 1, 0)
+        gbox3.addWidget(self.labelbox, 2, 0)
         gbox3.addWidget(removebtn, 2, 1)
-        gbox3.addWidget(maxlab, 3, 0)
-        gbox3.addWidget(reflabbtn, 3, 1)
+        gbox3.addWidget(self.maxlab, 3, 0)
+        gbox3.addWidget(labn_refreshbtn, 3, 2)
+        gbox3.addWidget(QLabel('merge labels:'), 5, 0); gbox3.addWidget(lab2combo, 5, 1); gbox3.addWidget(lab2_refreshbtn, 5, 2)
+        gbox3.addWidget(mlsbtn, 6, 0, 1, 3)
+        gbox3.addWidget(l2pbtn, 4, 0, 1, 3)
 
         box2b.setLayout(gbox2b)
         box2.setLayout(gbox2)
@@ -206,15 +294,24 @@ class GTWidget(QWidget):
                 caption="Choose .zarr with 3d/raw and 3d/labeled inside",
                 )
         print(self.file_path)
-        zarrfi = zarr.open(self.file_path)
+        #zarrfi = zarr.open(self.file_path)
 
-        image = zarrfi[os.path.join('3d','raw')]
-        labels = zarrfi[os.path.join('3d','labeled')].astype(int)[:]
-        #self.image = magic_imread(os.path.join(self.file_path,'3d/raw'))
-        #self.labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
+        #image = zarrfi[os.path.join('3d','raw')]
+        #labels = zarrfi[os.path.join('3d','labeled')].astype(int)[:]
+        #self.
+        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
+        #self.
+        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
 
-        self.viewer.add_image(image)
-        self.viewer.add_labels(labels)
+        self.viewer.dims.ndisplay = 3
+        n = len(self.viewer.layers)
+        self.viewer.add_layer(image)
+        self.viewer.layers[n].reset_contrast_limits()
+        self.viewer.add_layer(labels)
+        self.viewer.layers[n+1].brush_size=4
+
+        if self.labels_editable:
+            self._convert_dask(self.viewer.layers[n+1].name)
 
     def _save_in_place(self):
         zarrfi = zarr.open(self.file_path)
@@ -232,30 +329,48 @@ class GTWidget(QWidget):
 
     def _update_combos(self,
         combobox,
-        layertype='Image'):
+        layer_type='Image',
+        set_index=None):
         
         rememberID = combobox.currentIndex()
         combobox.clear(); count = -1
+        combolist = []
         for item in self.viewer.layers:
-            if layertype in str(type(item)):
+            if layer_type in str(type(item)):
                 combobox.addItem(item.name)
+                combolist.append(item.name)
                 count += 1
-        if rememberID>=0 and rememberID <= count:
+        if set_index is not None and abs(set_index) < count:
+            combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
+        elif rememberID>=0 and rememberID < count:
             combobox.setCurrentIndex(rememberID)
-    
-    def _set_active_image(self, name):     
-        self.active_image = name
     
     def _set_active_label(self, name):     
         self.active_label = name
+        if self.labels_editable:
+            self._convert_dask(name)
     
-    def _set_active_label2(self, name):     
-        self.active_label2 = name
+    def _convert_dask(self, layer_name):
+        try:
+            self.viewer.layers[layer_name].data.chunks
+        except:
+            # not a dask
+            return
+        print('converting layer '+layer_name+' to numpy array')
+        self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
+        self.labels_editable = True
+        self.labcheck.setCheckState(2)
 
-    def _set_active_points(self, name):     
-        self.active_points = name
+    def _set_editable(self, state):
+        self.labels_editable = bool(state)
+        if self.labels_editable:
+            try:
+                label = self.active_label
+            except AttributeError:
+                return
+            self._convert_dask(self.active_label)
 
-    def _setup_spin(self, spinbox, minval=None, maxval=None, suff=None, val=None, step=None):
+    def _setup_spin(self, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, attrname=None, dtype=int):
         if minval is not None:
             spinbox.setMinimum(minval)
         if maxval is not None:
@@ -266,8 +381,10 @@ class GTWidget(QWidget):
             spinbox.setValue(val)
         if step is not None:
             spinbox.setSingleStep(step)
-
-
+        if attrname is not None:
+            spinbox.valueChanged[dtype].connect(lambda value: self._update_attr(value, attrname))
+            setattr(self, attrname, spinbox.value())
+            
     def _change_vis(self, box):
         if box.isVisible():
             box.setVisible(False)
@@ -278,14 +395,26 @@ class GTWidget(QWidget):
         self.viewer.add_points(
                 ndim=3, 
                 face_color='magenta', 
-                edge_color='white',
+                border_color='white',
                 size=5,
                 out_of_slice_display=True,
                 opacity=0.7,
                 symbol='x')
-  
+        
+    def _convert_ch2z(self):
+        try:
+            pts = self.viewer.layers[self.active_points]
+        except AttributeError:
+            print("Points layer not defined.")
+            return
+        
+        pts.data[:,0] = pts.data[:,0]/self.nch
+        pts.refresh()
+        
+    def _rxy(self):
+        self.viewer.camera.angles = [self.viewer.camera.angles[0], 0, 90]
+    
     def _auto_z(self):
-        count = 0
         should_break=False
         try:
             pts = self.viewer.layers[self.active_points]
@@ -301,30 +430,18 @@ class GTWidget(QWidget):
         if not should_break:
             pts = self.viewer.layers[self.active_points]
             img = self.viewer.layers[self.active_image]
-            for pt in pts.data:
-                idx = tuple(pt.astype(int))
-                maxz = np.argmax(img.data[:, idx[1], idx[2]])
-                pts.data[count, 0] = maxz
-                count += 1
+            # if len(pts.selected_data)>0:
+            #     pt_list = pts.selected_data
+            # else:
+            pt_list = [i for i in range(len(pts.data))]
+            for pt_id in pt_list: #s.data:
+                coords = tuple(pts.data[pt_id].astype(int))
+                maxz = np.argmax(img.data[:, coords[1], coords[2]])
+                pts.data[pt_id, 0] = maxz
             pts.refresh()
 
-    def _set_rad_xy(self, val):
-        self.rad_xy = val
-    def _set_rad_z(self, val):
-        self.rad_z = val
-    def _set_mrad_xy(self, val):
-        self.max_rad_xy = val
-    def _set_mrad_z(self, val):
-        self.max_rad_z = val
-    def _set_rad_snap(self, val):
-        self.snap_rad = val
-    def _set_sig_xy(self, val):
-        self.blur_sig[1] = val
-        self.blur_sig[2] = val  
-    def _set_sig_z(self, val):
-        self.blur_sig[0] = val
-    def _set_rem_label(self, val):
-        self.rem_label = val
+    def _update_attr(self, value, attrname):
+        setattr(self, attrname, value)
 
     def _change_z(self, z):
         should_break=False
@@ -334,11 +451,26 @@ class GTWidget(QWidget):
             print("Points layer not defined.")
             should_break=True
         if not should_break:
-            for pt in self.viewer.layers[self.active_points]._selected_data:
+            for pt in self.viewer.layers[self.active_points].selected_data:
                 self.viewer.layers[self.active_points].data[pt, 0] = z
         
         self.viewer.layers[self.active_points].refresh()
-    
+
+    def _set_max_label(self):
+        should_break=False
+        try:
+            self.viewer.layers[self.active_label]
+        except: # AttributeError:
+            should_break=True
+        if not should_break:
+            try: #check if dask
+                maxL = self.viewer.layers[self.active_label].data.max().compute()
+            except: #if not dask
+                maxL = self.viewer.layers[self.active_label].data.max()
+            #maxL = self.viewer.layers[self.active_label].data.max()
+            self.labelbox.setMaximum(maxL)
+            self.maxlab.setText("max label: "+str(maxL))
+        
     def _remove_label(self):
         should_break=False
         try:
@@ -349,6 +481,8 @@ class GTWidget(QWidget):
         if should_break:
             return
         
+        self._convert_dask(self.active_label)
+        
         mask = labels.data == self.rem_label
         labels.data[mask] = 0
         labels.refresh()
@@ -357,17 +491,19 @@ class GTWidget(QWidget):
         should_break=False
         try:
             labels = self.viewer.layers[self.active_label]
+            self._convert_dask(self.active_label)
         except AttributeError:
             print("Labels layer not defined.")
             should_break = True
         try:
             labels2 = self.viewer.layers[self.active_label2]
+            self._convert_dask(self.active_label2)
         except AttributeError:
             print("Merge labels layer not defined.")
             should_break = True
         if should_break:
             return
-        
+
         max0 = labels.data.max()
         mask = labels2.data>0
         min0 = labels2.data[mask].min()
@@ -387,7 +523,28 @@ class GTWidget(QWidget):
         except:
             print("Points layer doesn't exist")
         
+    def _labels2points(self):
+        try:
+            labels = self.viewer.layers[self.active_label].data
+        except AttributeError:
+            print("Labels layer not defined. Labels to points function exited.")
+            return
+        # cannot operate on dask...
+        self._convert_dask(self.active_label)
+        labels = self.viewer.layers[self.active_label].data
 
+        mask = labels>0
+        com = center_of_mass(mask, labels=labels, index=np.unique(labels[mask]))
+        self.viewer.add_points(com,             
+                ndim=3, 
+                face_color='green', 
+                border_color='white',
+                size=5,
+                out_of_slice_display=True,
+                opacity=0.7,
+                symbol='x',
+                name='points from '+self.active_label)
+            
     def _points2labels(self):
         should_break=False
         try:
@@ -402,59 +559,49 @@ class GTWidget(QWidget):
             should_break=True
         try:
             labels = self.viewer.layers[self.active_label].data
-            curr_n = labels.max()
+            # check if dask:
+            try:
+                curr_n = labels.max().compute()
+            except:
+                curr_n = labels.max()
         except AttributeError:
             curr_n = 0
         
         if should_break:
             print("Points to labels function exited.")
             return
-
-        x = pts[:,2]
-        y = pts[:,1]
-        z = pts[:,0]
-        n = len(z)
         
-        img_inv = gaussian_filter(np.min(img) + np.max(img) - img, self.blur_sig)
+        blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
+        if np.any(blur_sig):
+            img_inv = gaussian_filter(np.min(img) + np.max(img) - img, blur_sig)
+        else:
+            img_inv = np.min(img) + np.max(img) - img
 
-        w = img.shape[2]
-        h = img.shape[1]
-        d = img.shape[0]
-            
-        # make markers:
         markers = np.zeros(img.shape, dtype='int')
-        
-        for j in range(n):
-            pos = np.round([z[j], y[j], x[j]]).astype('int')
+        mask = np.zeros(img.shape, dtype='bool')
 
-            if self.snap_rad>0:
-                zrange, yrange, xrange, rel_pos = self.get_slices(self.snap_rad, self.snap_rad, pos, img.shape)
-                pointIntensity = img_inv[zrange, yrange, xrange]
+        if self.snap_rad>0:
+            self._snap_to_max
 
-                shift = np.unravel_index(np.argmin(pointIntensity), pointIntensity.shape)
-                shift = np.asarray(shift)-self.snap_rad
-
-                z[j] = z[j] + shift[0]
-                y[j] = y[j] + shift[1]
-                x[j] = x[j] + shift[2]
-                
-                pos = np.round([z[j], y[j], x[j]]).astype('int')  
-
-            markers[pos[0], pos[1], pos[2]] = j+1+curr_n
+        # make markers:
+        count = 1
+        for pos in pts: 
+            pos = np.round(pos).astype('int')
+            markers[tuple(pos)] = count+curr_n
+            count += 1
 
         # make mask:
-        mask = np.zeros_like(img, dtype='bool')
-
-        for j in range(n):
-            pos = np.round([z[j], y[j], x[j]]).astype('int')
-            pointIntensity = img_inv[pos[0], pos[1], pos[2]]
+        count = 1
+        for pos in pts:
+            pos = np.round(pos).astype('int')
+            pointIntensity = img_inv[tuple(pos)]
             
             # find local min (inverted max) value:
-            zrange, yrange, xrange, rel_pos = self.get_slices(self.max_rad_xy, self.max_rad_z, pos, img.shape)
+            zrange, yrange, xrange, rel_pos = self._get_slices(self.max_rad_xy, self.max_rad_z, pos, img.shape)
             subim = img_inv[zrange, yrange, xrange]        
             local_min = np.min(subim) 
             # get local region to threshold, find local min value:
-            zrange, yrange, xrange, rel_pos = self.get_slices(self.rad_xy, self.rad_z, pos, img.shape)
+            zrange, yrange, xrange, rel_pos = self._get_slices(self.rad_xy, self.rad_z, pos, img.shape)
             subim = img_inv[zrange, yrange, xrange]
             local_max = np.max(subim) # background
             #tifffile.imwrite(os.path.join(label_dir,"subim_"+str(j)+".tif"), np.min(subim, axis=0))
@@ -462,14 +609,14 @@ class GTWidget(QWidget):
             # threshold:
             thresh = 0.5*local_min + 0.5*local_max 
             if thresh < pointIntensity:
-                print("threshold overriden for spot "+str(j)+" "+str(thresh)+" "+str(pointIntensity))
+                #print("threshold overriden for spot "+str(j)+" "+str(thresh)+" "+str(pointIntensity))
                 thresh = 0.5*local_max + 0.5*pointIntensity
             subim_mask = subim <= thresh
             
             # check for multiple objects:
             sublabels = label(subim_mask)
             if sublabels.max() > 1:
-                wantLabel = sublabels[rel_pos[0], rel_pos[1], rel_pos[2]] 
+                wantLabel = sublabels[tuple(rel_pos)]
                 subim_mask = sublabels == wantLabel
                 
                 # recheck max:
@@ -477,40 +624,77 @@ class GTWidget(QWidget):
                 if thresh < thresh2:
                     subim_mask = subim <= thresh2
                     sublabels = label(subim_mask)
-                    wantLabel = sublabels[rel_pos[0], rel_pos[1], rel_pos[2]] 
+                    wantLabel = sublabels[tuple(rel_pos)]
                     subim_mask = sublabels == wantLabel
             
             pt_solidity = regionprops(subim_mask.astype('int'))[0].solidity
             
             if pt_solidity < 0.8:
-                subim_mask = self.dist_watershed_sep(subim_mask, rel_pos)
+                subim_mask = self._dist_watershed_sep(subim_mask, rel_pos)
             submask = mask[zrange, yrange, xrange]
             submask = np.logical_or(submask, subim_mask)
 
             mask[zrange, yrange, xrange] = submask
             
         outlabels = watershed(img_inv, markers=markers, mask=mask)
-        self.viewer.add_labels(outlabels, name='Points2labels')
+        self.viewer.add_labels(outlabels, name='labels from '+self.active_points)
 
-    def get_slices(self, rad_xy, rad_z, loc, shape):
+    def _snap_to_max(self):
+        should_break=False
+        try:
+            pts = self.viewer.layers[self.active_points].data
+        except AttributeError:
+            print("Points layer not defined.")
+            should_break=True
+        try:
+            img = self.viewer.layers[self.active_image].data
+        except AttributeError:
+            print("Image layer not defined.")
+            should_break=True
+        if self.snap_rad<=0:
+            print("Snap radius must be >0.")
+            should_break=True
+        if should_break:
+            print("Snap to max could not complete. Make sure correct image and points layers are selected.")
+            return
+        
+        blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
+        img_inv = gaussian_filter(np.min(img) + np.max(img) - img, blur_sig)
+        count = 0
+
+        for pos in pts:
+            pos = np.round(pos).astype('int')
+            zrange, yrange, xrange, rel_pos = self._get_slices(self.snap_rad, self.snap_rad, pos, img.shape)
+            pointIntensity = img_inv[zrange, yrange, xrange]
+
+            shift = np.unravel_index(np.argmin(pointIntensity), pointIntensity.shape)
+            shift = np.asarray(shift)-self.snap_rad
+
+            pos = (pos + shift).astype('int')
+            pts[count] = pos
+            count += 1
+        self.viewer.layers[self.active_points].refresh()
+
+
+    def _get_slices(self, rad_xy, rad_z, loc, shape):
         x1 = max(loc[2] - rad_xy, 0) ; 
-        x2 = min(loc[2] + rad_xy, shape[2]) ; 
+        x2 = min(loc[2] + rad_xy+1, shape[2]) ; 
         y1 = max(loc[1] - rad_xy, 0) ; 
-        y2 = min(loc[1] + rad_xy, shape[1]) ; 
+        y2 = min(loc[1] + rad_xy+1, shape[1]) ; 
         z1 = max(loc[0] - rad_z, 0) ; 
-        z2 = min(loc[0] + rad_z, shape[0]) ;
+        z2 = min(loc[0] + rad_z+1, shape[0]) ;
         relx = loc[2] - x1 ;
         rely = loc[1] - y1 ;
         relz = loc[0] - z1 ;
         
         return slice(z1,z2), slice(y1,y2), slice(x1,x2), [relz, rely, relx]
-
-    def dist_watershed_sep(self, mask, loc):
+    
+    def _dist_watershed_sep(self, mask, loc):
         dists = distance_transform_edt(mask, sampling=[4,1,1])
-        
         pk_idx = peak_local_max(dists, labels=mask)
         pks = np.zeros_like(dists, dtype=bool)
-        pks[pk_idx] = True
+        for pk in pk_idx:
+            pks[tuple(pk)] = True
         pk_labels = label(pks)
         if pk_labels.max()>1:
             merged_peaks = center_of_mass(pks, pk_labels, index=range(1, pk_labels.max()+1))

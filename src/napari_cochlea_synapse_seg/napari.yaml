@@ -18,13 +18,16 @@ contributions:
     - id: cochlea-synapse-seg.make_sample_data
       python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data
       title: Load sample data from Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.make_qwidget
+    - id: cochlea-synapse-seg.make_gtwidget
       python_name: napari_cochlea_synapse_seg:GTWidget
       title: Make GTWidget
+    - id: cochlea-synapse-seg.make_ptwidget
+      python_name: napari_cochlea_synapse_seg:PointWidget
+      title: Make PointWidget
   readers:
     - command: cochlea-synapse-seg.get_reader
       accepts_directories: false
-      filename_patterns: ['*.npy']
+      filename_patterns: ['*.npy', '*.zarr', '*.xml']
   writers:
     - command: cochlea-synapse-seg.write_multiple
       layer_types: ['image*','labels*']
@@ -37,5 +40,7 @@ contributions:
       display_name: Cochlear Synapse Segmentation
       key: unique_id.1
   widgets:
-    - command: cochlea-synapse-seg.make_qwidget
+    - command: cochlea-synapse-seg.make_gtwidget
       display_name: Ground Truth Widget
+    - command: cochlea-synapse-seg.make_ptwidget
+      display_name: Point Loader Widget

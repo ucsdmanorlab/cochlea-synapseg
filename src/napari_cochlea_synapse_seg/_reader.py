@@ -7,6 +7,9 @@ https://napari.org/stable/plugins/guides.html?#readers
 """
 import numpy as np
 import zarr
+import xml.etree.ElementTree as et
+# from aicsimageio import AICSImage
+
 
 def napari_get_reader(path):
     """A basic implementation of a Reader contribution.
@@ -30,13 +33,71 @@ def napari_get_reader(path):
 
     # if we know we cannot read the file, we immediately return None.
     # otherwise we return the *function* that can read ``path``.
-    if isinstance(path, str) and path.endswith(".zarr"):
+    #if isinstance(path, str) and 
+    if path.endswith(".xml"):
+        return cellcounter_reader_function
+    # elif path.endswith(".czi"):
+    #     return czi_reader_function
+    elif path.endswith(".csv"):
+        return amira_csv_reader_function
+    elif path.endswith(".zarr"):
         return zarr_reader_function
     elif path.endswith(".npy"):
         return npy_reader_function
     else:
         return None
 
+# def czi_reader_function(file):
+#     #nch = 
+#     img = AICSImage(file).get_image_dask_data()#.get_image_dask_data("ZYX", C=1).compute()
+#     add_kwargs = {}
+#     layer_type = "image"  
+#     return [(img, add_kwargs, layer_type)]
+
+def amira_csv_reader_function(csvfile):
+    
+    zyxres = read_tiff_voxel_size(imfi)
+
+    cilroot = imroot[0:imroot.find('-')]
+    csvfi = glob.glob(cil_roi_dir+cilroot+"*.csv")[0]
+    xyz = np.genfromtxt(csvfi, delimiter=",", skip_header=1)[:,-3::]
+    x = xyz[:,0]/zyxres[2]
+    y = xyz[:,1]/zyxres[1]
+    z = xyz[:,2]/zyxres[0]
+    n = len(z)
+    return x, y, z, n
+
+    data = np.stack((z,y,x), axis=1)
+
+    # optional kwargs for the corresponding viewer.add_* method
+    add_kwargs = {}
+
+    layer_type = "points"  # optional, default is "image"
+    return [(data, add_kwargs, layer_type)]
+
+def cellcounter_reader_function(xmlfile):
+    try:
+        tree = et.parse(xmlfile)
+    except OSError:
+        print('Failed to read XML file {}.'.format(xmlfile))
+    
+    root = tree.getroot()
+    img_props = root[0]
+    markers = root[1]
+    
+    x = np.array([int(elem.text) for elem in markers.findall(".//MarkerX")])
+    y = np.array([int(elem.text) for elem in markers.findall(".//MarkerY")])
+    z = np.array([int(elem.text) for elem in markers.findall(".//MarkerZ")])
+    #n = len(x)
+    #imfi = img_props.find("Image_Filename").text
+    
+    data = np.stack((z,y,x), axis=1)
+
+    # optional kwargs for the corresponding viewer.add_* method
+    add_kwargs = {}
+
+    layer_type = "points"  # optional, default is "image"
+    return [(data, add_kwargs, layer_type)]
 
 def npy_reader_function(path):
     """Take a path or list of paths and return a list of LayerData tuples.
