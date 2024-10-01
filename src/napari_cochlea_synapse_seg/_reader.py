@@ -6,6 +6,7 @@ implement multiple readers or even other plugin contributions. see:
 https://napari.org/stable/plugins/guides.html?#readers
 """
 import numpy as np
+import pandas as pd
 import zarr
 import xml.etree.ElementTree as et
 # from aicsimageio import AICSImage
@@ -40,6 +41,8 @@ def napari_get_reader(path):
     #     return czi_reader_function
     elif path.endswith(".csv"):
         return amira_csv_reader_function
+    elif path.endswith(".xls") or path.endswith(".XLS"):
+        return amira_xls_reader_function
     elif path.endswith(".zarr"):
         return zarr_reader_function
     elif path.endswith(".npy"):
@@ -54,19 +57,34 @@ def napari_get_reader(path):
 #     layer_type = "image"  
 #     return [(img, add_kwargs, layer_type)]
 
+def amira_xls_reader_function(xlsfile):
+
+    df = pd.read_excel(xlsfile)
+    data = np.array(df[['CenterZ', 'CenterY', 'CenterX']])
+    
+    # optional kwargs for the corresponding viewer.add_* method
+    add_kwargs = {"ndim": 3, 
+                  "face_color": 'magenta', 
+                  "border_color": 'white',
+                  "size": 5,
+                  "out_of_slice_display": True,
+                  "opacity": 0.7,
+                  "symbol": 'x'}
+
+    layer_type = "points"  # optional, default is "image"
+    return [(data, add_kwargs, layer_type)]
+
 def amira_csv_reader_function(csvfile):
     
-    zyxres = read_tiff_voxel_size(imfi)
+    zyxres = [1, 1, 1] #read_tiff_voxel_size(imfi)
 
-    cilroot = imroot[0:imroot.find('-')]
-    csvfi = glob.glob(cil_roi_dir+cilroot+"*.csv")[0]
+    #cilroot = imroot[0:imroot.find('-')]
+    #csvfi = glob.glob(cil_roi_dir+cilroot+"*.csv")[0]
     xyz = np.genfromtxt(csvfi, delimiter=",", skip_header=1)[:,-3::]
     x = xyz[:,0]/zyxres[2]
     y = xyz[:,1]/zyxres[1]
     z = xyz[:,2]/zyxres[0]
-    n = len(z)
-    return x, y, z, n
-
+    
     data = np.stack((z,y,x), axis=1)
 
     # optional kwargs for the corresponding viewer.add_* method
@@ -94,7 +112,13 @@ def cellcounter_reader_function(xmlfile):
     data = np.stack((z,y,x), axis=1)
 
     # optional kwargs for the corresponding viewer.add_* method
-    add_kwargs = {}
+    add_kwargs = {"ndim": 3, 
+                  "face_color": 'magenta', 
+                  "border_color": 'white',
+                  "size": 5,
+                  "out_of_slice_display": True,
+                  "opacity": 0.7,
+                  "symbol": 'x'}
 
     layer_type = "points"  # optional, default is "image"
     return [(data, add_kwargs, layer_type)]

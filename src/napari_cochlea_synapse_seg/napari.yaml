@@ -27,7 +27,7 @@ contributions:
   readers:
     - command: cochlea-synapse-seg.get_reader
       accepts_directories: false
-      filename_patterns: ['*.npy', '*.zarr', '*.xml']
+      filename_patterns: ['*.npy', '*.zarr', '*.xml', '*.csv', '*.xls', '*.XLS']
   writers:
     - command: cochlea-synapse-seg.write_multiple
       layer_types: ['image*','labels*']

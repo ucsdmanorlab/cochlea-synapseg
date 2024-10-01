@@ -35,10 +35,13 @@ from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mas
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
+from napari.layers.utils.stack_utils import stack_to_images
+
 from ._reader import napari_get_reader
 import os
 import numpy as np
 import zarr
+import tifffile
 
 if TYPE_CHECKING:
     import napari
@@ -50,6 +53,8 @@ class PointWidget(QWidget):
         super().__init__()
         self.viewer = viewer
         self.setLayout(QVBoxLayout())
+        self.xyres = 1
+        self.zres = 1
 
         # Data loader box
         box1 = QGroupBox('Load point data')
@@ -69,6 +74,118 @@ class PointWidget(QWidget):
         box1.setLayout(gbox1)
         
         self.layout().addWidget(box1) 
+
+        # Conversion box
+        box2 = QGroupBox('Scale point data')
+        imgcombo = QComboBox(); img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
+        ptcombo = QComboBox(); pt_refreshbtn = QPushButton("\u27F3"); pt_refreshbtn.setToolTip("Refresh")
+        xyresbox = QDoubleSpinBox()
+        zresbox  = QDoubleSpinBox()
+        scalepts = QPushButton('Scale points')
+        splitbtn = QPushButton('Split channels')
+
+        scalepts.clicked.connect(self._scale_points)
+        splitbtn.clicked.connect(self._split_channels)
+
+        _update_combos(self, imgcombo, 'Image', set_index=-1)
+        _update_combos(self, ptcombo, 'Points', set_index=-1)
+        img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+        pt_refreshbtn.clicked.connect(lambda: _update_combos(self, ptcombo, 'Points'))
+        
+        _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
+        _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
+
+        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
+        imgcombo.currentTextChanged.connect(lambda: self._read_res())
+        imgcombo.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
+        imgcombo.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
+
+        ptcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_pt'))
+        
+        gbox2 = QGridLayout()
+        gbox2.addWidget(QLabel('image layer:'), 0, 0) 
+        gbox2.addWidget(imgcombo, 0, 1)
+        gbox2.addWidget(img_refreshbtn, 0, 2)
+        gbox2.addWidget(QLabel('points layer:'), 1, 0) 
+        gbox2.addWidget(ptcombo, 1, 1)
+        gbox2.addWidget(pt_refreshbtn, 1, 2)
+        gbox2.addWidget(QLabel('xy res:'), 2, 0) 
+        gbox2.addWidget(xyresbox, 2, 1)
+        gbox2.addWidget(QLabel('z res:'), 3, 0) 
+        gbox2.addWidget(zresbox, 3, 1)
+        gbox2.addWidget(scalepts, 4, 0, 1, 3)
+        gbox2.addWidget(splitbtn, 5, 0, 1, 3)
+
+        box2.setLayout(gbox2)
+        
+        self.layout().addWidget(box2) 
+
+    def _split_channels(self):
+        try:
+            img = self.viewer.layers[self.active_image]
+        except AttributeError:
+            print("Points layer not defined.")
+            return
+        
+        ll = self.viewer.layers
+        layer = img
+        images = stack_to_images(layer, axis=1)
+        ll.remove(layer)
+        ll.extend(images)
+        
+    def _scale_points(self):
+        try:
+            pts = self.viewer.layers[self.active_pt]
+        except AttributeError:
+            print("Points layer not defined.")
+            return
+        
+        pts.data[:,0] = pts.data[:,0]/self.zres
+        pts.data[:,1] = pts.data[:,1]/self.xyres
+        pts.data[:,2] = pts.data[:,2]/self.xyres
+        
+        pts.refresh()
+
+    def _read_res(self):
+        try:
+            img = self.viewer.layers[self.active_image]
+        except AttributeError:
+            return
+        imgpath = img.source.path
+
+        if imgpath.endswith('.tif'):
+            [z, y, x] = self._read_tiff_voxel_size(imgpath)
+        self.xyres = x
+        self.zres = z
+    
+    def _read_tiff_voxel_size(self, file_path):
+        """
+        Implemented based on information found in https://pypi.org/project/tifffile
+        """
+
+        def _xy_voxel_size(tags, key):
+            assert key in ['XResolution', 'YResolution']
+            if key in tags:
+                num_pixels, units = tags[key].value
+                return units / num_pixels
+            # return default
+            return 1.
+
+        with tifffile.TiffFile(file_path) as tiff:
+            image_metadata = tiff.imagej_metadata
+            if image_metadata is not None:
+                z = image_metadata.get('spacing', 1.)
+            else:
+                # default voxel size
+                z = 1.
+
+            tags = tiff.pages[0].tags
+            # parse X, Y resolution
+            y = _xy_voxel_size(tags, 'YResolution')
+            x = _xy_voxel_size(tags, 'XResolution')
+            # return voxel size
+            return [z, y, x]
+    
 
     def _load_cell_counter(self):
         self.file_path = QFileDialog.getOpenFileName(
@@ -127,16 +244,14 @@ class GTWidget(QWidget):
         self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
 
         zarrbtn.clicked.connect(self._choose_zarr)
-        zarrbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image', set_index=-1))
-        zarrbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels', set_index=-1))
+        zarrbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image', set_index=-1))
+        zarrbtn.clicked.connect(lambda: _update_combos(self, labcombo, 'Labels', set_index=-1))
 
-        #imgcombo.activated.connect(lambda: self._update_combos(imgcombo, 'Image'))
-        imgcombo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_image'))
-        #labcombo.activated.connect(lambda: self._update_combos(labcombo, 'Labels'))
+        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
         labcombo.currentTextChanged.connect(self._set_active_label)
         self.labcheck.stateChanged.connect(self._set_editable)
-        img_refreshbtn.clicked.connect(lambda: self._update_combos(imgcombo, 'Image'))
-        lab_refreshbtn.clicked.connect(lambda: self._update_combos(labcombo, 'Labels'))
+        img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, labcombo, 'Labels'))
         
         # Editor box
         box2 = QGroupBox('Point editor')
@@ -155,7 +270,7 @@ class GTWidget(QWidget):
         chbox = QSpinBox(); self.nch=1;  
         ch2zbtn = QPushButton("Channel to z conversion")
         ch2zbtn.clicked.connect(self._convert_ch2z)
-        pts_refreshbtn.clicked.connect(lambda: self._update_combos(ptscombo, 'Points'))
+        pts_refreshbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
         
         box3 = QGroupBox('Label editor')
         lab2combo = QComboBox(); 
@@ -186,49 +301,49 @@ class GTWidget(QWidget):
         mradzbox = QSpinBox(); 
         sigxybox = QDoubleSpinBox(); 
         sigzbox = QDoubleSpinBox(); 
-        self._setup_spin(radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
-        self._setup_spin(radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
-        self._setup_spin(snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
-        self._setup_spin(mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
-        self._setup_spin(mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
-        self._setup_spin(sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
-        self._setup_spin(sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
-        self._setup_spin(chbox,     minval=1, maxval=10, val=self.nch, attrname='nch')
-        self._setup_spin(self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
+        _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
+        _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
+        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
+        _setup_spin(self, mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
+        _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
+        _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
+        _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
+        _setup_spin(self, chbox,     minval=1, maxval=10, val=self.nch, attrname='nch')
+        _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
 
         ptsbtn.clicked.connect(self._new_pts)
-        ptsbtn.clicked.connect(lambda: self._update_combos(ptscombo,'Points', set_index=-1))
+        ptsbtn.clicked.connect(lambda: _update_combos(self, ptscombo,'Points', set_index=-1))
         #ptsbtn.clicked.connect(lambda: ptscombo.setCurrentIndex(ptscombo.count()-1))
-        #ptscombo.activated.connect(lambda: self._update_combos(ptscombo,'Points'))
-        ptscombo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_points'))
+        #ptscombo.activated.connect(lambda: _update_combos(self,ptscombo,'Points'))
+        ptscombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_points'))
         p2mbtn.clicked.connect(self._auto_z)
         rxybtn.clicked.connect(self._rxy)
         zbox.valueChanged[int].connect(self._change_z)
         box2b.setVisible(False)
         advbtn.toggled.connect(box2b.setVisible) #lambda: self._change_vis(box2b))
         p2lbtn.clicked.connect(self._points2labels)
-        p2lbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels', set_index=-1))
+        p2lbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
         #p2lbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(lab2combo.count()-1))
         snapbtn.clicked.connect(self._snap_to_max)
-        #lab2combo.activated.connect(lambda: self._update_combos(lab2combo, 'Labels'))
-        lab2combo.currentTextChanged.connect(lambda name: self._update_attr(name, 'active_label2'))
-        lab2_refreshbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels'))
+        #lab2combo.activated.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
+        lab2combo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_label2'))
+        lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
     
         mlsbtn.clicked.connect(self._merge_labels)
-        mlsbtn.clicked.connect(lambda: self._update_combos(lab2combo, 'Labels', set_index=-1))
+        mlsbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
         #mlsbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(-1))
         savebtn.clicked.connect(self._save_in_place)
 
         removebtn.clicked.connect(self._remove_label)
         l2pbtn.clicked.connect(self._labels2points)
-        l2pbtn.clicked.connect(lambda: self._update_combos(ptscombo, 'Points'))
+        l2pbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
 
         #self.setLayout(QHBoxLayout())
         
-        self._update_combos(imgcombo, 'Image')
-        self._update_combos(labcombo, 'Labels')
-        self._update_combos(ptscombo, 'Points')
-        self._update_combos(lab2combo,'Labels')
+        _update_combos(self, imgcombo, 'Image')
+        _update_combos(self, labcombo, 'Labels')
+        _update_combos(self, ptscombo, 'Points')
+        _update_combos(self, lab2combo,'Labels')
 
         gbox = QGridLayout()
         gbox.addWidget(zarrbtn, 0, 0, 1, 3)
@@ -326,24 +441,6 @@ class GTWidget(QWidget):
             zarrfi[os.path.join('2d','labeled', str(z))] = np.expand_dims(labels[z], axis=0)
             zarrfi[os.path.join('2d','labeled', str(z))].attrs['offset'] = [0,]*2
             zarrfi[os.path.join('2d','labeled', str(z))].attrs['resolution'] = [1,]*2
-
-    def _update_combos(self,
-        combobox,
-        layer_type='Image',
-        set_index=None):
-        
-        rememberID = combobox.currentIndex()
-        combobox.clear(); count = -1
-        combolist = []
-        for item in self.viewer.layers:
-            if layer_type in str(type(item)):
-                combobox.addItem(item.name)
-                combolist.append(item.name)
-                count += 1
-        if set_index is not None and abs(set_index) < count:
-            combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
-        elif rememberID>=0 and rememberID < count:
-            combobox.setCurrentIndex(rememberID)
     
     def _set_active_label(self, name):     
         self.active_label = name
@@ -369,21 +466,6 @@ class GTWidget(QWidget):
             except AttributeError:
                 return
             self._convert_dask(self.active_label)
-
-    def _setup_spin(self, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, attrname=None, dtype=int):
-        if minval is not None:
-            spinbox.setMinimum(minval)
-        if maxval is not None:
-            spinbox.setMaximum(maxval)
-        if suff is not None:
-            spinbox.setSuffix(suff)
-        if val is not None:
-            spinbox.setValue(val)
-        if step is not None:
-            spinbox.setSingleStep(step)
-        if attrname is not None:
-            spinbox.valueChanged[dtype].connect(lambda value: self._update_attr(value, attrname))
-            setattr(self, attrname, spinbox.value())
             
     def _change_vis(self, box):
         if box.isVisible():
@@ -439,9 +521,6 @@ class GTWidget(QWidget):
                 maxz = np.argmax(img.data[:, coords[1], coords[2]])
                 pts.data[pt_id, 0] = maxz
             pts.refresh()
-
-    def _update_attr(self, value, attrname):
-        setattr(self, attrname, value)
 
     def _change_z(self, z):
         should_break=False
@@ -712,3 +791,41 @@ class GTWidget(QWidget):
             mask_out = mask
         
         return mask_out
+    
+def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
+        if minval is not None:
+            spinbox.setMinimum(minval)
+        if maxval is not None:
+            spinbox.setMaximum(maxval)
+        if suff is not None:
+            spinbox.setSuffix(suff)
+        if val is not None:
+            spinbox.setValue(val)
+        if step is not None:
+            spinbox.setSingleStep(step)
+        if dec is not None:
+            spinbox.setDecimals(dec)
+        if attrname is not None:
+            spinbox.valueChanged[dtype].connect(lambda value: _update_attr(curr_class, value, attrname))
+            setattr(curr_class, attrname, spinbox.value())
+
+def _update_attr(curr_class, value, attrname):
+        setattr(curr_class, attrname, value)
+
+def _update_combos(curr_class,
+        combobox,
+        layer_type='Image',
+        set_index=None):
+        
+        rememberID = combobox.currentIndex()
+        combobox.clear(); count = -1
+        combolist = []
+        for item in curr_class.viewer.layers:
+            if layer_type in str(type(item)):
+                combobox.addItem(item.name)
+                combolist.append(item.name)
+                count += 1
+        if set_index is not None and abs(set_index) < count:
+            combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
+        elif rememberID>=0 and rememberID < count:
+            combobox.setCurrentIndex(rememberID)
