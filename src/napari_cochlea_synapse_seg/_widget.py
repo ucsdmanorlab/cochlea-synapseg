@@ -1,8 +1,8 @@
 """
-This module contains four napari widgets declared in
-different ways:
+This module contains two napari widgets:
 
-- a pure Python function flagged with `autogenerate: true`
+- 1. Point loader widget, with functionality related to 
+    loading points (convert to real pixel units,   Python function flagged with `autogenerate: true`
     in the plugin manifest. Type annotations are used by
     magicgui to generate widgets for each parameter. Best
     suited for simple processing tasks - usually taking
@@ -53,50 +53,42 @@ class PointWidget(QWidget):
         super().__init__()
         self.viewer = viewer
         self.setLayout(QVBoxLayout())
-        self.xyres = 1
-        self.zres = 1
 
         # Data loader box
         box1 = QGroupBox('Load point data')
         cellcounter = QPushButton("cell counter rois")
-        imagejpoints = QPushButton("ImageJ point rois")
-        csvcoords = QPushButton("csv coordinates")
-
+        
         cellcounter.clicked.connect(self._load_cell_counter)
-        imagejpoints.clicked.connect(self._load_imagej_roi)
-        csvcoords.clicked.connect(self._load_csv)
-
+        
         gbox1 = QVBoxLayout()
         gbox1.addWidget(cellcounter)
-        gbox1.addWidget(imagejpoints)
-        gbox1.addWidget(csvcoords)
         
         box1.setLayout(gbox1)
         
-        self.layout().addWidget(box1) 
+        #self.layout().addWidget(box1) 
 
         # Conversion box
         box2 = QGroupBox('Scale point data')
         imgcombo = QComboBox(); img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
         ptcombo = QComboBox(); pt_refreshbtn = QPushButton("\u27F3"); pt_refreshbtn.setToolTip("Refresh")
-        xyresbox = QDoubleSpinBox()
-        zresbox  = QDoubleSpinBox()
+        
         scalepts = QPushButton('Scale points')
-        splitbtn = QPushButton('Split channels')
 
         scalepts.clicked.connect(self._scale_points)
-        splitbtn.clicked.connect(self._split_channels)
 
-        _update_combos(self, imgcombo, 'Image', set_index=-1)
-        _update_combos(self, ptcombo, 'Points', set_index=-1)
-        img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
-        pt_refreshbtn.clicked.connect(lambda: _update_combos(self, ptcombo, 'Points'))
+        xyresbox = QDoubleSpinBox()
+        zresbox  = QDoubleSpinBox()
+        splitbtn = QPushButton('Split channels')
+        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+
+        _update_combos(self, imgcombo, 'Image', set_index=-1); img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+        _update_combos(self, ptcombo, 'Points', set_index=-1); pt_refreshbtn.clicked.connect(lambda: _update_combos(self, ptcombo, 'Points'))
+        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
+        imgcombo.currentTextChanged.connect(lambda: self._read_res())
         
         _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
         _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
 
-        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
-        imgcombo.currentTextChanged.connect(lambda: self._read_res())
         imgcombo.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
         imgcombo.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
 
@@ -120,6 +112,350 @@ class PointWidget(QWidget):
         
         self.layout().addWidget(box2) 
 
+    
+    
+
+    def _load_cell_counter(self):
+        self.file_path = QFileDialog.getOpenFileName(
+                self,
+                caption="Choose cell counter .xml",
+                )
+        print(self.file_path)
+
+        
+
+        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
+        #self.
+        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
+
+        self.viewer.dims.ndisplay = 3
+        n = len(self.viewer.layers)
+        self.viewer.add_layer(image)
+        self.viewer.layers[n].reset_contrast_limits()
+        self.viewer.add_layer(labels)
+        self.viewer.layers[n+1].brush_size=4
+
+        if self.labels_editable:
+            self._convert_dask(self.viewer.layers[n+1].name)
+        return
+
+        
+        
+class ZarrWidget(QWidget):
+    def __init__(self, viewer: "napari.viewer.Viewer"):
+        super().__init__()
+        self.file_path = ''
+        # Data loader box
+        zarrbtn = QPushButton("Load zarr")
+        savebtn = QPushButton("Save zarr")
+
+        zarrbtn.clicked.connect(self._choose_zarr)
+        #savebtn.clicked.connect(self._save_in_place) #temporarily disabled while making changes
+
+        self.layout().addWidget(zarrbtn)
+        self.layout().addWidget(savebtn)
+
+    def _choose_zarr(self):
+        self.file_path = QFileDialog.getExistingDirectory(
+                self,
+                caption="Choose .zarr with 3d/raw and 3d/labeled inside",
+                )
+        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
+        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
+
+        self.viewer.dims.ndisplay = 3
+        n = len(self.viewer.layers)
+        self.viewer.add_layer(image)
+        self.viewer.layers[n].reset_contrast_limits()
+        self.viewer.add_layer(labels)
+        self.viewer.layers[n+1].brush_size=4
+
+        #if self.labels_editable:
+        #    self._convert_dask(self.viewer.layers[n+1].name)
+    
+    def _save_in_place(self):
+        zarrfi = zarr.open(self.file_path)
+    
+        ## make edits
+        labels = self.viewer.layers[self.active_label].data
+        zarrfi[os.path.join('3d','labeled')] = labels
+        zarrfi[os.path.join('3d','labeled')].attrs['offset'] = [0,]*3
+        zarrfi[os.path.join('3d','labeled')].attrs['resolution'] = [1,]*3
+        
+        for z in range(labels.shape[0]):
+            zarrfi[os.path.join('2d','labeled', str(z))] = np.expand_dims(labels[z], axis=0)
+            zarrfi[os.path.join('2d','labeled', str(z))].attrs['offset'] = [0,]*2
+            zarrfi[os.path.join('2d','labeled', str(z))].attrs['resolution'] = [1,]*2
+        
+                
+class GTWidget(QWidget):
+    # your QWidget.__init__ can optionally request the napari viewer instance
+    # use a type annotation of 'napari.viewer.Viewer' for any parameter
+    def __init__(self, viewer: "napari.viewer.Viewer"):
+        super().__init__()
+        self.viewer = viewer
+        self.setLayout(QVBoxLayout())
+        self.file_path = ''
+        self.labels_editable = False
+        self.xyres = 1
+        self.zres = 1
+
+        # Active layers box ##############################################################
+        #box1 = QGroupBox('Active layers')
+        imgcombo = QComboBox() 
+        labcombo = QComboBox()
+        ptscombo = QComboBox()
+
+        img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
+        lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
+        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
+
+        self.labcheck = QCheckBox("Make labels editable")
+        self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
+
+        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
+        labcombo.currentTextChanged.connect(self._set_active_label)
+        ptscombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_points'))
+        
+        self.labcheck.stateChanged.connect(self._set_editable)
+        img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, labcombo, 'Labels'))
+        pts_refreshbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
+        _update_combos(self, imgcombo, 'Image', set_index=-1) 
+        _update_combos(self, ptscombo, 'Points', set_index=-1)
+        _update_combos(self, labcombo, 'Labels', set_index=-1)
+        
+        # set layout:
+        # layers_gbox = QGridLayout()
+        # layers_gbox.addWidget(QLabel('image layer:'), 1, 0) ; layers_gbox.addWidget(imgcombo, 1, 1)
+        # layers_gbox.addWidget(img_refreshbtn, 1, 2)
+        # layers_gbox.addWidget(QLabel('points layer:'), 2, 0) ; layers_gbox.addWidget(ptscombo, 2, 1)
+        # layers_gbox.addWidget(pts_refreshbtn, 2, 2)      
+        #   
+        # layers_gbox.addWidget(QLabel('labels layer:'), 3, 0) ; layers_gbox.addWidget(labcombo, 3, 1)
+        # layers_gbox.addWidget(lab_refreshbtn, 3, 2)
+        # layers_gbox.addWidget(self.labcheck, 4, 0)
+        
+        # box1.setLayout(layers_gbox)
+        
+        # Image tools box ################################################################
+        box2 = QGroupBox('Image tools')
+
+        xyresbox = QDoubleSpinBox()
+        zresbox  = QDoubleSpinBox()
+        splitbtn = QPushButton('Split channels')
+        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
+        
+        _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
+        _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
+        imgcombo.currentTextChanged.connect(lambda: self._read_res())
+        imgcombo.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
+        imgcombo.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
+        
+        image_gbox = QGridLayout()
+        image_gbox.addWidget(QLabel('image layer:'), 0, 0) ; image_gbox.addWidget(imgcombo, 0, 1)
+        image_gbox.addWidget(img_refreshbtn, 0, 2)
+        image_gbox.addWidget(QLabel('xy res:'), 1, 0) 
+        image_gbox.addWidget(xyresbox, 1, 1)
+        image_gbox.addWidget(QLabel('z res:'), 2, 0) 
+        image_gbox.addWidget(zresbox, 2, 1)
+        image_gbox.addWidget(splitbtn, 3, 0, 1, 2)
+
+        box2.setLayout(image_gbox)
+
+        # Point tools box ################################################################
+        box3 = QGroupBox('Points tools')
+        scalepts = QPushButton('real -> pixel units')
+        chbox = QSpinBox(); self.nch=1;  
+        ch2zbtn = QPushButton('chan -> z convert')
+        
+        _setup_spin(self, chbox, minval=1, maxval=10, val=self.nch, attrname='nch')
+        ch2zbtn.clicked.connect(self._convert_ch2z)
+        scalepts.clicked.connect(self._scale_points)
+
+        points_gbox = QGridLayout()
+        points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(ptscombo, 0, 1)
+        points_gbox.addWidget(pts_refreshbtn, 0, 2)
+        points_gbox.addWidget(scalepts, 1, 0, 1, 2)
+        points_gbox.addWidget(chbox, 2, 0)
+        points_gbox.addWidget(ch2zbtn, 2, 1)
+        box3.setLayout(points_gbox)
+
+        # Label tools box ################################################################
+        box4 = QGroupBox('Labels tools')
+        self.labelbox = QSpinBox(); self.rem_label = 1
+        removebtn = QPushButton("Remove label")
+        self.maxlab = QLabel("max label: ")
+        labn_refreshbtn = QPushButton("\u27F3"); labn_refreshbtn.setToolTip("Refresh")
+        labn_refreshbtn.clicked.connect(self._set_max_label)
+        labcombo.currentTextChanged.connect(self._set_max_label)
+
+        lab2combo = QComboBox(); 
+        lab2_refreshbtn = QPushButton("\u27F3"); lab2_refreshbtn.setToolTip("Refresh")
+        mlsbtn = QPushButton("Merge labels")        
+        l2pbtn = QPushButton("Labels to points")
+
+        lab2combo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_label2'))
+        lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
+        mlsbtn.clicked.connect(self._merge_labels)
+        mlsbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
+        removebtn.clicked.connect(self._remove_label)
+        l2pbtn.clicked.connect(self._labels2points)
+        l2pbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
+        _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
+
+        labels_gbox = QGridLayout()
+        labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(labcombo, 0, 1)
+        labels_gbox.addWidget(lab_refreshbtn, 0, 2)
+        labels_gbox.addWidget(self.labcheck, 1, 0)
+        labels_gbox.addWidget(self.labelbox, 2, 0)
+        labels_gbox.addWidget(removebtn, 2, 1)
+        labels_gbox.addWidget(self.maxlab, 3, 0)
+        labels_gbox.addWidget(labn_refreshbtn, 3, 2)
+        labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
+        labels_gbox.addWidget(lab2combo, 4, 1); 
+        labels_gbox.addWidget(lab2_refreshbtn, 5, 2)
+        labels_gbox.addWidget(mlsbtn, 5, 0, 1, 2)
+        labels_gbox.addWidget(l2pbtn, 6, 0, 1, 2)
+
+        box4.setLayout(labels_gbox)
+
+        # Points2labels box ##############################################################
+        box5 = QGroupBox('Points to labels')
+
+        ptsbtn = QPushButton("New points layer")
+        rxybtn = QPushButton("Rotate to xy")
+        p2mbtn = QPushButton("Auto-adjust z")
+
+        zbox = QSpinBox()
+        zbox.setMinimum(0)
+        zbox.setMaximum(50)#self.zmax)
+
+        snapbtn = QPushButton("Snap to max")
+
+        p2lbtn = QPushButton("Points to labels")
+        advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
+                
+        # Advanced settings
+        self.rad_xy = 6
+        self.rad_z = 4
+        self.max_rad_xy = 2
+        self.max_rad_z = 2
+        self.snap_rad = 2
+        self.blur_sig_xy = 0.7
+        self.blur_sig_z = 0.5
+
+        box5b = QGroupBox('Advanced settings')
+        radxybox = QSpinBox(); 
+        radzbox = QSpinBox(); 
+        snapbox = QSpinBox(); 
+        mradxybox = QSpinBox() ; 
+        mradzbox = QSpinBox(); 
+        sigxybox = QDoubleSpinBox(); 
+        sigzbox = QDoubleSpinBox(); 
+        _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
+        _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
+        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
+        _setup_spin(self, mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
+        _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
+        _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
+        _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
+        
+
+        ptsbtn.clicked.connect(self._new_pts)
+        ptsbtn.clicked.connect(lambda: _update_combos(self, ptscombo,'Points', set_index=-1))
+        p2mbtn.clicked.connect(self._auto_z)
+        rxybtn.clicked.connect(self._rxy)
+        zbox.valueChanged[int].connect(self._change_z)
+        snapbtn.clicked.connect(self._snap_to_max)
+        p2lbtn.clicked.connect(self._points2labels)
+        p2lbtn.clicked.connect(lambda: _update_combos(self,labcombo, 'Labels'))
+        p2lbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
+        
+        box5b.setVisible(False)
+        advbtn.toggled.connect(box5b.setVisible)
+        
+        _update_combos(self, imgcombo, 'Image')
+        _update_combos(self, labcombo, 'Labels')
+        _update_combos(self, ptscombo, 'Points')
+        _update_combos(self, lab2combo,'Labels')
+
+        gbox5b = QGridLayout()
+        gbox5b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox5b.addWidget(radxybox, 0, 1)
+        gbox5b.addWidget(QLabel('threshold z rad:'), 1, 0); gbox5b.addWidget(radzbox, 1, 1)
+        gbox5b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox5b.addWidget(snapbox, 2, 1)
+        gbox5b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox5b.addWidget(mradxybox, 3, 1)
+        gbox5b.addWidget(QLabel('local max z rad:'), 4, 0); gbox5b.addWidget(mradzbox, 4, 1)
+        gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(sigxybox, 5, 1)
+        gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(sigzbox, 6, 1)
+        box5b.setLayout(gbox5b)
+
+        p2l_gbox = QGridLayout()
+        p2l_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
+        # gbox2.addWidget(QLabel('points layer:'), 1, 0) ; gbox2.addWidget(ptscombo, 1, 1)
+        # gbox2.addWidget(pts_refreshbtn, 1, 2)
+        p2l_gbox.addWidget(rxybtn, 1, 0)
+        p2l_gbox.addWidget(p2mbtn, 1, 1)
+        p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
+        p2l_gbox.addWidget(zbox, 2, 1)
+        p2l_gbox.addWidget(snapbtn, 3, 0, 1, 2)  
+        p2l_gbox.addWidget(p2lbtn, 4, 0, 1, 2)  
+        p2l_gbox.addWidget(advbtn, 5, 0, 1, 2)
+        p2l_gbox.addWidget(box5b, 6, 0, 1, 2)
+        
+        box5.setLayout(p2l_gbox)
+        
+        #self.layout().addWidget(box1)
+        self.layout().addWidget(box2)
+        self.layout().addWidget(box3)
+        self.layout().addWidget(box5)
+        self.layout().addWidget(box4)
+    
+    def _set_active_label(self, name):     
+        self.active_label = name
+        if self.labels_editable:
+            self._convert_dask(name)
+    
+    def _convert_dask(self, layer_name):
+        try:
+            self.viewer.layers[layer_name].data.chunks
+        except:
+            # not a dask
+            return
+        print('converting layer '+layer_name+' to numpy array')
+        self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
+        self.labels_editable = True
+        self.labcheck.setCheckState(2)
+
+    def _set_editable(self, state):
+        self.labels_editable = bool(state)
+        if self.labels_editable:
+            try:
+                label = self.active_label
+            except AttributeError:
+                return
+            self._convert_dask(self.active_label)
+
+    def _new_pts(self):
+        self.viewer.add_points(
+                ndim=3, 
+                face_color='magenta', 
+                border_color='white',
+                size=5,
+                out_of_slice_display=True,
+                opacity=0.7,
+                symbol='x')
+        
+    def _convert_ch2z(self):
+        try:
+            pts = self.viewer.layers[self.active_points]
+        except AttributeError:
+            print("Points layer not defined.")
+            return
+        
+        pts.data[:,0] = pts.data[:,0]/self.nch
+        pts.refresh()
+    
     def _split_channels(self):
         try:
             img = self.viewer.layers[self.active_image]
@@ -135,7 +471,7 @@ class PointWidget(QWidget):
         
     def _scale_points(self):
         try:
-            pts = self.viewer.layers[self.active_pt]
+            pts = self.viewer.layers[self.active_points]
         except AttributeError:
             print("Points layer not defined.")
             return
@@ -185,314 +521,7 @@ class PointWidget(QWidget):
             x = _xy_voxel_size(tags, 'XResolution')
             # return voxel size
             return [z, y, x]
-    
 
-    def _load_cell_counter(self):
-        self.file_path = QFileDialog.getOpenFileName(
-                self,
-                caption="Choose cell counter .xml",
-                )
-        print(self.file_path)
-
-        
-
-        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
-        #self.
-        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
-
-        self.viewer.dims.ndisplay = 3
-        n = len(self.viewer.layers)
-        self.viewer.add_layer(image)
-        self.viewer.layers[n].reset_contrast_limits()
-        self.viewer.add_layer(labels)
-        self.viewer.layers[n+1].brush_size=4
-
-        if self.labels_editable:
-            self._convert_dask(self.viewer.layers[n+1].name)
-        return
-    def _load_imagej_roi(self):
-        return
-    def _load_csv(self):
-        return
-        
-        
-        
-        
-
-class GTWidget(QWidget):
-    # your QWidget.__init__ can optionally request the napari viewer instance
-    # use a type annotation of 'napari.viewer.Viewer' for any parameter
-    def __init__(self, viewer: "napari.viewer.Viewer"):
-        super().__init__()
-        self.viewer = viewer
-        self.setLayout(QVBoxLayout())
-        self.file_path = ''
-        self.labels_editable = False
-
-        # Data loader box
-        box1 = QGroupBox('Load data')
-        
-        zarrbtn = QPushButton("Load zarr")
-        imgcombo = QComboBox() 
-        labcombo = QComboBox()
-        img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
-        lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
-        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
-        lab2_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
- 
-        self.labcheck = QCheckBox("Make labels editable")
-        self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
-
-        zarrbtn.clicked.connect(self._choose_zarr)
-        zarrbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image', set_index=-1))
-        zarrbtn.clicked.connect(lambda: _update_combos(self, labcombo, 'Labels', set_index=-1))
-
-        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
-        labcombo.currentTextChanged.connect(self._set_active_label)
-        self.labcheck.stateChanged.connect(self._set_editable)
-        img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
-        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, labcombo, 'Labels'))
-        
-        # Editor box
-        box2 = QGroupBox('Point editor')
-        
-        ptsbtn = QPushButton("New points layer")
-        ptscombo = QComboBox()
-        rxybtn = QPushButton("Rotate to xy")
-        p2mbtn = QPushButton("Auto-adjust z")
-        zbox = QSpinBox()
-        zbox.setMinimum(0)
-        zbox.setMaximum(50)#self.zmax)
-        p2lbtn = QPushButton("Points to labels")
-        l2pbtn = QPushButton("Labels to points")
-        advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
-        snapbtn = QPushButton("Snap to max")
-        chbox = QSpinBox(); self.nch=1;  
-        ch2zbtn = QPushButton("Channel to z conversion")
-        ch2zbtn.clicked.connect(self._convert_ch2z)
-        pts_refreshbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
-        
-        box3 = QGroupBox('Label editor')
-        lab2combo = QComboBox(); 
-        mlsbtn = QPushButton("Merge labels")
-        self.labelbox = QSpinBox(); self.rem_label = 1
-        labcombo.currentTextChanged.connect(self._set_max_label)
-        removebtn = QPushButton("Remove label")
-        self.maxlab = QLabel("max label: ")
-        labn_refreshbtn = QPushButton("\u27F3"); labn_refreshbtn.setToolTip("Refresh")
-        labn_refreshbtn.clicked.connect(self._set_max_label)
-        savebtn = QPushButton("Save zarr")
-        
-        # Advanced settings
-        self.rad_xy = 6
-        self.rad_z = 4
-        self.max_rad_xy = 2
-        self.max_rad_z = 2
-        self.snap_rad = 2
-        self.blur_sig_xy = 0.7
-        self.blur_sig_z = 0.5
-
-        box2b = QGroupBox('Advanced settings')
-        radxybox = QSpinBox(); 
-        
-        radzbox = QSpinBox(); 
-        snapbox = QSpinBox(); 
-        mradxybox = QSpinBox() ; 
-        mradzbox = QSpinBox(); 
-        sigxybox = QDoubleSpinBox(); 
-        sigzbox = QDoubleSpinBox(); 
-        _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
-        _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
-        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
-        _setup_spin(self, mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
-        _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
-        _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
-        _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
-        _setup_spin(self, chbox,     minval=1, maxval=10, val=self.nch, attrname='nch')
-        _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
-
-        ptsbtn.clicked.connect(self._new_pts)
-        ptsbtn.clicked.connect(lambda: _update_combos(self, ptscombo,'Points', set_index=-1))
-        #ptsbtn.clicked.connect(lambda: ptscombo.setCurrentIndex(ptscombo.count()-1))
-        #ptscombo.activated.connect(lambda: _update_combos(self,ptscombo,'Points'))
-        ptscombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_points'))
-        p2mbtn.clicked.connect(self._auto_z)
-        rxybtn.clicked.connect(self._rxy)
-        zbox.valueChanged[int].connect(self._change_z)
-        box2b.setVisible(False)
-        advbtn.toggled.connect(box2b.setVisible) #lambda: self._change_vis(box2b))
-        p2lbtn.clicked.connect(self._points2labels)
-        p2lbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
-        #p2lbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(lab2combo.count()-1))
-        snapbtn.clicked.connect(self._snap_to_max)
-        #lab2combo.activated.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
-        lab2combo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_label2'))
-        lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
-    
-        mlsbtn.clicked.connect(self._merge_labels)
-        mlsbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
-        #mlsbtn.clicked.connect(lambda: lab2combo.setCurrentIndex(-1))
-        savebtn.clicked.connect(self._save_in_place)
-
-        removebtn.clicked.connect(self._remove_label)
-        l2pbtn.clicked.connect(self._labels2points)
-        l2pbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
-
-        #self.setLayout(QHBoxLayout())
-        
-        _update_combos(self, imgcombo, 'Image')
-        _update_combos(self, labcombo, 'Labels')
-        _update_combos(self, ptscombo, 'Points')
-        _update_combos(self, lab2combo,'Labels')
-
-        gbox = QGridLayout()
-        gbox.addWidget(zarrbtn, 0, 0, 1, 3)
-        gbox.addWidget(QLabel('image layer:'), 1, 0) ; gbox.addWidget(imgcombo, 1, 1)
-        gbox.addWidget(img_refreshbtn, 1, 2)
-        #gbox.addWidget(QLabel('labels layer:'), 2, 0) ; gbox.addWidget(labcombo, 2, 1)
-        #gbox.addWidget(lab_refreshbtn, 2, 2)
-        #gbox.addWidget(labcheck, 3, 0)
-        #gbox.setColumnStretch(2, 1)
-        #gbox.setColumnStretch(0, 2)
-        #gbox.setColumnStretch(1, 3)
-        
-        box1.setLayout(gbox)
-        
-        gbox2b = QGridLayout()
-        gbox2b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox2b.addWidget(radxybox, 0, 1)
-        gbox2b.addWidget(QLabel('threshold z rad:'), 1, 0); gbox2b.addWidget(radzbox, 1, 1)
-        gbox2b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox2b.addWidget(snapbox, 2, 1)
-        gbox2b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox2b.addWidget(mradxybox, 3, 1)
-        gbox2b.addWidget(QLabel('local max z rad:'), 4, 0); gbox2b.addWidget(mradzbox, 4, 1)
-        gbox2b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox2b.addWidget(sigxybox, 5, 1)
-        gbox2b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox2b.addWidget(sigzbox, 6, 1)
-
-        gbox2 = QGridLayout()
-        gbox2.addWidget(ptsbtn, 0, 0, 1, 3)
-        gbox2.addWidget(QLabel('points layer:'), 1, 0) ; gbox2.addWidget(ptscombo, 1, 1)
-        gbox2.addWidget(pts_refreshbtn, 1, 2)
-        gbox2.addWidget(rxybtn, 2, 0, 1, 1)
-        gbox2.addWidget(p2mbtn, 2, 1, 1, 2)
-        gbox2.addWidget(QLabel('manually edit z:'), 3, 0)
-        gbox2.addWidget(zbox, 3, 1)
-        gbox2.addWidget(snapbtn, 4, 1, 1, 3)  
-        gbox2.addWidget(p2lbtn, 5, 0, 1, 3)  
-        gbox2.addWidget(advbtn, 6, 0, 1, 3)
-        gbox2.addWidget(box2b, 7, 0, 1, 3)
-        gbox2.addWidget(chbox, 8, 0)
-        gbox2.addWidget(ch2zbtn, 8, 1, 1, 2)
-
-        gbox3 = QGridLayout()
-        gbox3.addWidget(QLabel('labels layer:'), 0, 0) ; gbox3.addWidget(labcombo, 0, 1)
-        gbox3.addWidget(lab_refreshbtn, 0, 2)
-        gbox3.addWidget(self.labcheck, 1, 0)
-        gbox3.addWidget(self.labelbox, 2, 0)
-        gbox3.addWidget(removebtn, 2, 1)
-        gbox3.addWidget(self.maxlab, 3, 0)
-        gbox3.addWidget(labn_refreshbtn, 3, 2)
-        gbox3.addWidget(QLabel('merge labels:'), 5, 0); gbox3.addWidget(lab2combo, 5, 1); gbox3.addWidget(lab2_refreshbtn, 5, 2)
-        gbox3.addWidget(mlsbtn, 6, 0, 1, 3)
-        gbox3.addWidget(l2pbtn, 4, 0, 1, 3)
-
-        box2b.setLayout(gbox2b)
-        box2.setLayout(gbox2)
-        box3.setLayout(gbox3)
-        
-        self.layout().addWidget(box1) #zarrbtn)
-        self.layout().addWidget(box2)
-        self.layout().addWidget(box3)
-        self.layout().addWidget(savebtn)
-
-    def _choose_zarr(self):
-        self.file_path = QFileDialog.getExistingDirectory(
-                self,
-                caption="Choose .zarr with 3d/raw and 3d/labeled inside",
-                )
-        print(self.file_path)
-        #zarrfi = zarr.open(self.file_path)
-
-        #image = zarrfi[os.path.join('3d','raw')]
-        #labels = zarrfi[os.path.join('3d','labeled')].astype(int)[:]
-        #self.
-        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
-        #self.
-        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
-
-        self.viewer.dims.ndisplay = 3
-        n = len(self.viewer.layers)
-        self.viewer.add_layer(image)
-        self.viewer.layers[n].reset_contrast_limits()
-        self.viewer.add_layer(labels)
-        self.viewer.layers[n+1].brush_size=4
-
-        if self.labels_editable:
-            self._convert_dask(self.viewer.layers[n+1].name)
-
-    def _save_in_place(self):
-        zarrfi = zarr.open(self.file_path)
-    
-        ## make edits
-        labels = self.viewer.layers[self.active_label].data
-        zarrfi[os.path.join('3d','labeled')] = labels
-        zarrfi[os.path.join('3d','labeled')].attrs['offset'] = [0,]*3
-        zarrfi[os.path.join('3d','labeled')].attrs['resolution'] = [1,]*3
-        
-        for z in range(labels.shape[0]):
-            zarrfi[os.path.join('2d','labeled', str(z))] = np.expand_dims(labels[z], axis=0)
-            zarrfi[os.path.join('2d','labeled', str(z))].attrs['offset'] = [0,]*2
-            zarrfi[os.path.join('2d','labeled', str(z))].attrs['resolution'] = [1,]*2
-    
-    def _set_active_label(self, name):     
-        self.active_label = name
-        if self.labels_editable:
-            self._convert_dask(name)
-    
-    def _convert_dask(self, layer_name):
-        try:
-            self.viewer.layers[layer_name].data.chunks
-        except:
-            # not a dask
-            return
-        print('converting layer '+layer_name+' to numpy array')
-        self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
-        self.labels_editable = True
-        self.labcheck.setCheckState(2)
-
-    def _set_editable(self, state):
-        self.labels_editable = bool(state)
-        if self.labels_editable:
-            try:
-                label = self.active_label
-            except AttributeError:
-                return
-            self._convert_dask(self.active_label)
-            
-    def _change_vis(self, box):
-        if box.isVisible():
-            box.setVisible(False)
-        else:
-            box.setVisible(True)
-
-    def _new_pts(self):
-        self.viewer.add_points(
-                ndim=3, 
-                face_color='magenta', 
-                border_color='white',
-                size=5,
-                out_of_slice_display=True,
-                opacity=0.7,
-                symbol='x')
-        
-    def _convert_ch2z(self):
-        try:
-            pts = self.viewer.layers[self.active_points]
-        except AttributeError:
-            print("Points layer not defined.")
-            return
-        
-        pts.data[:,0] = pts.data[:,0]/self.nch
-        pts.refresh()
-        
     def _rxy(self):
         self.viewer.camera.angles = [self.viewer.camera.angles[0], 0, 90]
     
