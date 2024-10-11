@@ -21,13 +21,10 @@ contributions:
     - id: cochlea-synapse-seg.make_gtwidget
       python_name: napari_cochlea_synapse_seg:GTWidget
       title: Make GTWidget
-    - id: cochlea-synapse-seg.make_ptwidget
-      python_name: napari_cochlea_synapse_seg:PointWidget
-      title: Make PointWidget
   readers:
     - command: cochlea-synapse-seg.get_reader
       accepts_directories: false
-      filename_patterns: ['*.npy', '*.zarr', '*.xml', '*.csv', '*.xls', '*.XLS']
+      filename_patterns: ['*.npy', '*.xml', '*.csv', '*.xls', '*.XLS']
   writers:
     - command: cochlea-synapse-seg.write_multiple
       layer_types: ['image*','labels*']
@@ -42,5 +39,3 @@ contributions:
   widgets:
     - command: cochlea-synapse-seg.make_gtwidget
       display_name: Ground Truth Widget
-    - command: cochlea-synapse-seg.make_ptwidget
-      display_name: Point Loader Widget

@@ -43,8 +43,8 @@ def napari_get_reader(path):
         return amira_csv_reader_function
     elif path.endswith(".xls") or path.endswith(".XLS"):
         return amira_xls_reader_function
-    elif path.endswith(".zarr"):
-        return zarr_reader_function
+    #elif path.endswith(".zarr"):
+    #    return zarr_reader_function
     elif path.endswith(".npy"):
         return npy_reader_function
     else:
@@ -78,8 +78,6 @@ def amira_csv_reader_function(csvfile):
     
     zyxres = [1, 1, 1] #read_tiff_voxel_size(imfi)
 
-    #cilroot = imroot[0:imroot.find('-')]
-    #csvfi = glob.glob(cil_roi_dir+cilroot+"*.csv")[0]
     xyz = np.genfromtxt(csvfi, delimiter=",", skip_header=1)[:,-3::]
     x = xyz[:,0]/zyxres[2]
     y = xyz[:,1]/zyxres[1]
@@ -106,8 +104,6 @@ def cellcounter_reader_function(xmlfile):
     x = np.array([int(elem.text) for elem in markers.findall(".//MarkerX")])
     y = np.array([int(elem.text) for elem in markers.findall(".//MarkerY")])
     z = np.array([int(elem.text) for elem in markers.findall(".//MarkerZ")])
-    #n = len(x)
-    #imfi = img_props.find("Image_Filename").text
     
     data = np.stack((z,y,x), axis=1)
 

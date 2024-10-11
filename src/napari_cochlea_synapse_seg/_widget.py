@@ -30,7 +30,7 @@ Replace code below according to your needs.
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox
+from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
@@ -48,98 +48,6 @@ if TYPE_CHECKING:
 
 from napari_builtins.io._read import magic_imread
 
-class PointWidget(QWidget):
-    def __init__(self, viewer: "napari.viewer.Viewer"):
-        super().__init__()
-        self.viewer = viewer
-        self.setLayout(QVBoxLayout())
-
-        # Data loader box
-        box1 = QGroupBox('Load point data')
-        cellcounter = QPushButton("cell counter rois")
-        
-        cellcounter.clicked.connect(self._load_cell_counter)
-        
-        gbox1 = QVBoxLayout()
-        gbox1.addWidget(cellcounter)
-        
-        box1.setLayout(gbox1)
-        
-        #self.layout().addWidget(box1) 
-
-        # Conversion box
-        box2 = QGroupBox('Scale point data')
-        imgcombo = QComboBox(); img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
-        ptcombo = QComboBox(); pt_refreshbtn = QPushButton("\u27F3"); pt_refreshbtn.setToolTip("Refresh")
-        
-        scalepts = QPushButton('Scale points')
-
-        scalepts.clicked.connect(self._scale_points)
-
-        xyresbox = QDoubleSpinBox()
-        zresbox  = QDoubleSpinBox()
-        splitbtn = QPushButton('Split channels')
-        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
-
-        _update_combos(self, imgcombo, 'Image', set_index=-1); img_refreshbtn.clicked.connect(lambda: _update_combos(self, imgcombo, 'Image'))
-        _update_combos(self, ptcombo, 'Points', set_index=-1); pt_refreshbtn.clicked.connect(lambda: _update_combos(self, ptcombo, 'Points'))
-        imgcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
-        imgcombo.currentTextChanged.connect(lambda: self._read_res())
-        
-        _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
-        _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
-
-        imgcombo.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
-        imgcombo.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
-
-        ptcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_pt'))
-        
-        gbox2 = QGridLayout()
-        gbox2.addWidget(QLabel('image layer:'), 0, 0) 
-        gbox2.addWidget(imgcombo, 0, 1)
-        gbox2.addWidget(img_refreshbtn, 0, 2)
-        gbox2.addWidget(QLabel('points layer:'), 1, 0) 
-        gbox2.addWidget(ptcombo, 1, 1)
-        gbox2.addWidget(pt_refreshbtn, 1, 2)
-        gbox2.addWidget(QLabel('xy res:'), 2, 0) 
-        gbox2.addWidget(xyresbox, 2, 1)
-        gbox2.addWidget(QLabel('z res:'), 3, 0) 
-        gbox2.addWidget(zresbox, 3, 1)
-        gbox2.addWidget(scalepts, 4, 0, 1, 3)
-        gbox2.addWidget(splitbtn, 5, 0, 1, 3)
-
-        box2.setLayout(gbox2)
-        
-        self.layout().addWidget(box2) 
-
-    
-    
-
-    def _load_cell_counter(self):
-        self.file_path = QFileDialog.getOpenFileName(
-                self,
-                caption="Choose cell counter .xml",
-                )
-        print(self.file_path)
-
-        
-
-        image = magic_imread(os.path.join(self.file_path,'3d/raw'))
-        #self.
-        labels = magic_imread(os.path.join(self.file_path,'3d/labeled'))
-
-        self.viewer.dims.ndisplay = 3
-        n = len(self.viewer.layers)
-        self.viewer.add_layer(image)
-        self.viewer.layers[n].reset_contrast_limits()
-        self.viewer.add_layer(labels)
-        self.viewer.layers[n+1].brush_size=4
-
-        if self.labels_editable:
-            self._convert_dask(self.viewer.layers[n+1].name)
-        return
-
-        
         
 class ZarrWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
@@ -147,13 +55,22 @@ class ZarrWidget(QWidget):
         self.file_path = ''
         # Data loader box
         zarrbtn = QPushButton("Load zarr")
-        savebtn = QPushButton("Save zarr")
+        
+        savebox = QGroupBox('Save zarr')
+
+        save3Dbtn = QPushButton("Save 3D only")
+        save23Dbtn = QPushButton("Save 2D and 3D")
 
         zarrbtn.clicked.connect(self._choose_zarr)
-        #savebtn.clicked.connect(self._save_in_place) #temporarily disabled while making changes
+        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
+        save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
+        savebox.setLayout(QHBoxLayout())
+        savebox.layout().addWidget(save3Dbtn)
+        savebox.layout().addWidget(save23Dbtn)
 
         self.layout().addWidget(zarrbtn)
-        self.layout().addWidget(savebtn)
+        
+        self.layout().addWidget(savebox)
 
     def _choose_zarr(self):
         self.file_path = QFileDialog.getExistingDirectory(
@@ -170,9 +87,12 @@ class ZarrWidget(QWidget):
         self.viewer.add_layer(labels)
         self.viewer.layers[n+1].brush_size=4
 
-        #if self.labels_editable:
-        #    self._convert_dask(self.viewer.layers[n+1].name)
-    
+    def _save_zarr(self, threeD=True, twoD=False):
+        self.file_path = QFileDialog.getExistingDirectory(
+                self,
+                caption="Choose .zarr with 3d/raw and 3d/labeled inside",
+                )
+
     def _save_in_place(self):
         zarrfi = zarr.open(self.file_path)
     
@@ -328,7 +248,7 @@ class GTWidget(QWidget):
         p2mbtn = QPushButton("Auto-adjust z")
 
         zbox = QSpinBox()
-        zbox.setMinimum(0)
+        zbox.setMinimum(-50)
         zbox.setMaximum(50)#self.zmax)
 
         snapbtn = QPushButton("Snap to max")
@@ -367,6 +287,7 @@ class GTWidget(QWidget):
         p2mbtn.clicked.connect(self._auto_z)
         rxybtn.clicked.connect(self._rxy)
         zbox.valueChanged[int].connect(self._change_z)
+        zbox.valueChanged[int].connect(lambda: zbox.setValue(0))
         snapbtn.clicked.connect(self._snap_to_max)
         p2lbtn.clicked.connect(self._points2labels)
         p2lbtn.clicked.connect(lambda: _update_combos(self,labcombo, 'Labels'))
@@ -404,13 +325,65 @@ class GTWidget(QWidget):
         p2l_gbox.addWidget(box5b, 6, 0, 1, 2)
         
         box5.setLayout(p2l_gbox)
-        
+
+        box6 = QGroupBox('Save zarr')
+        save3Dbtn = QPushButton("Save 3D only")
+        save23Dbtn = QPushButton("Save 2D and 3D")
+
+        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
+        save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
+        box6.setLayout(QHBoxLayout())
+        box6.layout().addWidget(save3Dbtn)
+        box6.layout().addWidget(save23Dbtn)
+
         #self.layout().addWidget(box1)
         self.layout().addWidget(box2)
         self.layout().addWidget(box3)
         self.layout().addWidget(box5)
         self.layout().addWidget(box4)
-    
+        self.layout().addWidget(box6)
+
+    def _save_zarr(self, threeD=True, twoD=False):
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save to .zarr",
+                                       filter="Zarrs (*.zarr)")
+        print(fileName)
+        if len(fileName)>0:
+            if not fileName.endswith(".zarr"):
+                fileName = fileName + ".zarr"
+        else:
+            return
+
+        # TODO: add dialog box to warn if overwriting a file
+
+        zarrfi = zarr.open(fileName)
+
+        raw = self.viewer.layers[self.active_image].data
+        labels = self.viewer.layers[self.active_label].data
+
+        for (name, data) in (('raw', raw), ('labeled', labels)):
+            is_dask=True
+            try:
+                data.chunks
+            except:
+                is_dask=False
+
+            if threeD:
+                if is_dask:
+                    zarrfi[os.path.join('3d', f'{name}')] = data.compute()
+                else:
+                    zarrfi[os.path.join('3d', f'{name}')] = data
+                zarrfi[os.path.join('3d', f'{name}')].attrs['offset'] = [0,]*3
+                zarrfi[os.path.join('3d', f'{name}')].attrs['resolution'] = [1,]*3
+
+            if twoD:
+                for z in range(data.shape[0]):
+                    if is_dask:
+                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0).compute()
+                    else:
+                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0)
+                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['offset'] = [0,]*2
+                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
+
     def _set_active_label(self, name):     
         self.active_label = name
         if self.labels_editable:
@@ -491,9 +464,10 @@ class GTWidget(QWidget):
 
         if imgpath.endswith('.tif'):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
-        self.xyres = x
-        self.zres = z
-    
+            self.xyres = x
+            self.zres = z
+        # TODO: add functionality for .czi or other formats?
+        
     def _read_tiff_voxel_size(self, file_path):
         """
         Implemented based on information found in https://pypi.org/project/tifffile
@@ -560,7 +534,7 @@ class GTWidget(QWidget):
             should_break=True
         if not should_break:
             for pt in self.viewer.layers[self.active_points].selected_data:
-                self.viewer.layers[self.active_points].data[pt, 0] = z
+                self.viewer.layers[self.active_points].data[pt, 0] = self.viewer.layers[self.active_points].data[pt, 0]+z
         
         self.viewer.layers[self.active_points].refresh()
 
