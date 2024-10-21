@@ -344,11 +344,17 @@ class GTWidget(QWidget):
         self.layout().addWidget(box6)
 
     def _save_zarr(self, threeD=True, twoD=False):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Save to .zarr",
-                                       filter="Zarrs (*.zarr)")
+
+        zarrdialog = QFileDialog()
+        zarrdialog.setDefaultSuffix("zarr")
+        
+        fileName, _ = zarrdialog.getSaveFileName(self, "Save to .zarr",
+                                       filter="Zarrs (*.zarr)",
+                                       )
         print(fileName)
         if len(fileName)>0:
             if not fileName.endswith(".zarr"):
+                print('not zarr')
                 fileName = fileName + ".zarr"
         else:
             return
