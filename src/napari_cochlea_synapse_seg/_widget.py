@@ -30,12 +30,13 @@ Replace code below according to your needs.
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox
+from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
 from napari.layers.utils.stack_utils import stack_to_images
+#from PyQt5.QtGui import QCompleter
 
 from ._reader import napari_get_reader
 import os
@@ -128,7 +129,7 @@ class GTWidget(QWidget):
 
         img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
         lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
-        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh")
+        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh") 
 
         self.labcheck = QCheckBox("Make labels editable")
         self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
@@ -329,12 +330,30 @@ class GTWidget(QWidget):
         box6 = QGroupBox('Save zarr')
         save3Dbtn = QPushButton("Save 3D only")
         save23Dbtn = QPushButton("Save 2D and 3D")
+        browse_dir_button = QPushButton("\uD83D\uDCC1"); browse_dir_button.setToolTip("Browse for directory")
+        browse_zarr_button = QPushButton("\uD83D\uDD0D"); browse_zarr_button.setToolTip("Find existing zarr")
 
+        self.file_path_input = QLineEdit(self)
+        self.file_name_input = QLineEdit(self)
+
+        browse_dir_button.clicked.connect(self._browse_for_path)
+        browse_zarr_button.clicked.connect(self._browse_for_zarr)
+        self.file_name_input.editingFinished.connect(self._ensure_zarr_extension)
+        self.file_path_input.textChanged.connect(self._update_completer)
         save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
         save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
-        box6.setLayout(QHBoxLayout())
-        box6.layout().addWidget(save3Dbtn)
-        box6.layout().addWidget(save23Dbtn)
+
+        box6.setLayout(QGridLayout())
+        box6a = QGroupBox('File path'); box6a.setLayout(QHBoxLayout())
+        box6a.layout().addWidget(self.file_path_input)
+        box6a.layout().addWidget(browse_dir_button)
+        box6.layout().addWidget(box6a, 0, 0, 1, 2)
+        box6b = QGroupBox('File name'); box6b.setLayout(QHBoxLayout())
+        box6b.layout().addWidget(self.file_name_input)
+        box6b.layout().addWidget(browse_zarr_button)
+        box6.layout().addWidget(box6b, 1, 0, 1, 2)        
+        box6.layout().addWidget(save3Dbtn, 2, 0, 1, 1)
+        box6.layout().addWidget(save23Dbtn, 2, 1, 1, 1)
 
         #self.layout().addWidget(box1)
         self.layout().addWidget(box2)
@@ -343,21 +362,41 @@ class GTWidget(QWidget):
         self.layout().addWidget(box4)
         self.layout().addWidget(box6)
 
+    def _browse_for_path(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if directory:
+            self.file_path_input.setText(directory)
+
+    def _browse_for_zarr(self):
+        start_from = self.file_path_input.text()
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory", start_from)
+        if directory:
+            directory, zarrfi = os.path.split(directory)
+            self.file_path_input.setText(directory)
+            self.file_name_input.setText(zarrfi)
+
+    def _ensure_zarr_extension(self):
+        file_name = self.file_name_input.text()
+        if not file_name.endswith(".zarr"):
+            self.file_name_input.setText(file_name + ".zarr")
+    
+    def _update_completer(self):
+        directory = self.file_path_input.text()
+        if os.path.isdir(directory):
+            files_in_dir = os.listdir(directory)
+            completer = QCompleter(files_in_dir, self.file_name_input)
+            #completer.setCaseSensitivity(Qt.CaseInsensitive)
+            self.file_name_input.setCompleter(completer)
+
     def _save_zarr(self, threeD=True, twoD=False):
 
-        zarrdialog = QFileDialog()
-        zarrdialog.setDefaultSuffix("zarr")
+        fileName = os.path.join(self.file_path_input.text(), self.file_name_input.text())
+        #zarrdialog = QFileDialog()
+        #zarrdialog.setDefaultSuffix("zarr")
         
-        fileName, _ = zarrdialog.getSaveFileName(self, "Save to .zarr",
-                                       filter="Zarrs (*.zarr)",
-                                       )
-        print(fileName)
-        if len(fileName)>0:
-            if not fileName.endswith(".zarr"):
-                print('not zarr')
-                fileName = fileName + ".zarr"
-        else:
-            return
+        #fileName, _ = zarrdialog.getSaveFileName(self, "Save to .zarr",
+        #                               filter="Zarrs (*.zarr)",
+        #                               )
 
         # TODO: add dialog box to warn if overwriting a file
 
