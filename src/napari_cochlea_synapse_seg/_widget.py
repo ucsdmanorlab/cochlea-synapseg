@@ -265,6 +265,7 @@ class GTWidget(QWidget):
         self.snap_rad = 2
         self.blur_sig_xy = 0.7
         self.blur_sig_z = 0.5
+        self.solidity_thresh = 0.8
 
         box5b = QGroupBox('Advanced settings')
         radxybox = QSpinBox(); 
@@ -274,6 +275,10 @@ class GTWidget(QWidget):
         mradzbox = QSpinBox(); 
         sigxybox = QDoubleSpinBox(); 
         sigzbox = QDoubleSpinBox(); 
+        solidbox = QDoubleSpinBox();
+        wshedcombo = QComboBox();
+        self.wshed_type = 'Image'
+
         _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
         _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
         _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
@@ -281,7 +286,9 @@ class GTWidget(QWidget):
         _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
         _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
         _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
-        
+        _setup_spin(self, solidbox,  minval=0, maxval=1, val=self.solidity_thresh, step=0.05, attrname='solidity_thresh', dtype=float)
+        wshedcombo.addItem('Image'); wshedcombo.addItem('Distance')
+        wshedcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'wshed_type'))
 
         ptsbtn.clicked.connect(self._new_pts)
         ptsbtn.clicked.connect(lambda: _update_combos(self, ptscombo,'Points', set_index=-1))
@@ -310,6 +317,8 @@ class GTWidget(QWidget):
         gbox5b.addWidget(QLabel('local max z rad:'), 4, 0); gbox5b.addWidget(mradzbox, 4, 1)
         gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(sigxybox, 5, 1)
         gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(sigzbox, 6, 1)
+        gbox5b.addWidget(QLabel('solidity:'), 7, 0); gbox5b.addWidget(solidbox, 7, 1)
+        gbox5b.addWidget(QLabel('watershed type:'), 8, 0); gbox5b.addWidget(wshedcombo, 8, 1)
         box5b.setLayout(gbox5b)
 
         p2l_gbox = QGridLayout()
@@ -514,7 +523,7 @@ class GTWidget(QWidget):
     def _read_res(self):
         try:
             img = self.viewer.layers[self.active_image]
-        except AttributeError:
+        except:
             return
         imgpath = img.source.path
 
@@ -742,7 +751,6 @@ class GTWidget(QWidget):
             zrange, yrange, xrange, rel_pos = self._get_slices(self.rad_xy, self.rad_z, pos, img.shape)
             subim = img_inv[zrange, yrange, xrange]
             local_max = np.max(subim) # background
-            #tifffile.imwrite(os.path.join(label_dir,"subim_"+str(j)+".tif"), np.min(subim, axis=0))
             
             # threshold:
             thresh = 0.5*local_min + 0.5*local_max 
@@ -767,14 +775,23 @@ class GTWidget(QWidget):
             
             pt_solidity = regionprops(subim_mask.astype('int'))[0].solidity
             
-            if pt_solidity < 0.8:
+            if pt_solidity < self.solidity_thresh:
                 subim_mask = self._dist_watershed_sep(subim_mask, rel_pos)
             submask = mask[zrange, yrange, xrange]
             submask = np.logical_or(submask, subim_mask)
 
             mask[zrange, yrange, xrange] = submask
             
-        outlabels = watershed(img_inv, markers=markers, mask=mask)
+        if self.wshed_type=='Image':
+            outlabels = watershed(img_inv, markers=markers, mask=mask)
+        elif self.wshed_type=='Distance':
+            outlabels = watershed(
+                    distance_transform_edt(markers==0, sampling=[3,1,1]),
+                    markers=markers,
+                    mask=mask)
+        else:
+            print('invalid watershed type')
+            return
         self.viewer.add_labels(outlabels, name='labels from '+self.active_points)
 
     def _snap_to_max(self):
@@ -828,7 +845,7 @@ class GTWidget(QWidget):
         return slice(z1,z2), slice(y1,y2), slice(x1,x2), [relz, rely, relx]
     
     def _dist_watershed_sep(self, mask, loc):
-        dists = distance_transform_edt(mask, sampling=[4,1,1])
+        dists = distance_transform_edt(mask, sampling=[3,1,1])
         pk_idx = peak_local_max(dists, labels=mask)
         pks = np.zeros_like(dists, dtype=bool)
         for pk in pk_idx:
