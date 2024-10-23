@@ -332,7 +332,8 @@ class GTWidget(QWidget):
         save23Dbtn = QPushButton("Save 2D and 3D")
         browse_dir_button = QPushButton("\uD83D\uDCC1"); browse_dir_button.setToolTip("Browse for directory")
         browse_zarr_button = QPushButton("\uD83D\uDD0D"); browse_zarr_button.setToolTip("Find existing zarr")
-
+        from_source_button = QPushButton("from source"); from_source_button.setToolTip("Select location from raw source");
+        
         self.file_path_input = QLineEdit(self)
         self.file_name_input = QLineEdit(self)
 
@@ -342,6 +343,7 @@ class GTWidget(QWidget):
         self.file_path_input.textChanged.connect(self._update_completer)
         save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
         save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
+        from_source_button.clicked.connect(self._path_from_raw_source)
 
         box6.setLayout(QGridLayout())
         box6a = QGroupBox('File path'); box6a.setLayout(QHBoxLayout())
@@ -352,8 +354,9 @@ class GTWidget(QWidget):
         box6b.layout().addWidget(self.file_name_input)
         box6b.layout().addWidget(browse_zarr_button)
         box6.layout().addWidget(box6b, 1, 0, 1, 2)        
-        box6.layout().addWidget(save3Dbtn, 2, 0, 1, 1)
-        box6.layout().addWidget(save23Dbtn, 2, 1, 1, 1)
+        box6.layout().addWidget(from_source_button, 2, 0, 1, 2)
+        box6.layout().addWidget(save3Dbtn, 3, 0, 1, 1)
+        box6.layout().addWidget(save23Dbtn, 3, 1, 1, 1)
 
         #self.layout().addWidget(box1)
         self.layout().addWidget(box2)
@@ -361,7 +364,20 @@ class GTWidget(QWidget):
         self.layout().addWidget(box5)
         self.layout().addWidget(box4)
         self.layout().addWidget(box6)
+    
+    def _path_from_raw_source(self):
+        raw_path = self.viewer.layers[self.active_image].source.path
 
+        if raw_path.rfind('.zarr')>0:
+            raw_path = raw_path[0:raw_path.rfind('.zarr')+5]
+        
+        directory, zarrfi = os.path.split(raw_path)
+
+        zarrfi = os.path.splitext(zarrfi)[0]+'.zarr'
+
+        self.file_path_input.setText(directory)
+        self.file_name_input.setText(zarrfi)
+        
     def _browse_for_path(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
@@ -391,14 +407,9 @@ class GTWidget(QWidget):
     def _save_zarr(self, threeD=True, twoD=False):
 
         fileName = os.path.join(self.file_path_input.text(), self.file_name_input.text())
-        #zarrdialog = QFileDialog()
-        #zarrdialog.setDefaultSuffix("zarr")
-        
-        #fileName, _ = zarrdialog.getSaveFileName(self, "Save to .zarr",
-        #                               filter="Zarrs (*.zarr)",
-        #                               )
 
         # TODO: add dialog box to warn if overwriting a file
+        # TODO: ensure fileName ends with .zarr
 
         zarrfi = zarr.open(fileName)
 
