@@ -220,6 +220,7 @@ class GTWidget(QWidget):
         lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels'))
         mlsbtn.clicked.connect(self._merge_labels)
         mlsbtn.clicked.connect(lambda: _update_combos(self,lab2combo, 'Labels', set_index=-1))
+        mlsbtn.clicked.connect(self._set_max_label)
         removebtn.clicked.connect(self._remove_label)
         l2pbtn.clicked.connect(self._labels2points)
         l2pbtn.clicked.connect(lambda: _update_combos(self, ptscombo, 'Points'))
@@ -693,6 +694,8 @@ class GTWidget(QWidget):
                 name='points from '+self.active_label)
             
     def _points2labels(self):
+        # TODO: add in auto-update of combos if points2labels function breaks due to missing layer information
+
         should_break=False
         try:
             pts = self.viewer.layers[self.active_points].data
@@ -892,7 +895,7 @@ def _update_combos(curr_class,
         combobox,
         layer_type='Image',
         set_index=None):
-        
+
         rememberID = combobox.currentIndex()
         combobox.clear(); count = -1
         combolist = []
@@ -901,7 +904,8 @@ def _update_combos(curr_class,
                 combobox.addItem(item.name)
                 combolist.append(item.name)
                 count += 1
-        if set_index is not None and abs(set_index) < count:
+
+        if set_index is not None and (set_index < count or abs(set_index) <= count):
             combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
         elif rememberID>=0 and rememberID < count:
             combobox.setCurrentIndex(rememberID)
