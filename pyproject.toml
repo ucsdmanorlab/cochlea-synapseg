@@ -1,5 +1,5 @@
 [project]
-name = "cochlea-synapse-seg"
+name = "cochlea-synapseg"
 dynamic = ["version"]
 description = "A plugin to segment cochlear ribbon synapses automatically, as well as edit and adjust"
 readme = "README.md"
@@ -42,7 +42,7 @@ testing = [
 ]
 
 [project.entry-points."napari.manifest"]
-cochlea-synapse-seg = "napari_cochlea_synapse_seg:napari.yaml"
+cochlea-synapseg = "napari_cochlea_synapse_seg:napari.yaml"
 
 
 

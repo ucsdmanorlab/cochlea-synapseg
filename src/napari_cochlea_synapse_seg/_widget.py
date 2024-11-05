@@ -1,46 +1,7 @@
 """
-This module provides a set of widgets for generating and refining synapse ground truth data in the Napari viewer.
-Classes:
-    GTWidget: A QWidget for managing ground truth data, including image, points, and labels tools.
-Functions:
-    _setup_spin: Helper function to configure QSpinBox and QDoubleSpinBox widgets.
-    _update_attr: Helper function to update attributes of a class.
-    _update_combos: Helper function to update QComboBox items based on Napari layers.
-GTWidget:
-    Methods:
-        __init__: Initializes the GTWidget with the Napari viewer and sets up the UI.
-        init_ui: Sets up the main layout and calls setup methods for different toolboxes.
-        setup_image_box: Sets up the image tools box with controls for image resolution and channel splitting.
-        setup_points_box: Sets up the points tools box with controls for point scaling, conversion, and snapping.
-        setup_labels_box: Sets up the labels tools box with controls for label editing, merging, and conversion.
-        setup_save_box: Sets up the save box with controls for specifying file paths and saving Zarr files.
-        _path_from_raw_source: Sets the file path and name based on the raw image source.
-        _browse_for_path: Opens a file dialog to select a directory.
-        _browse_for_zarr: Opens a file dialog to select a Zarr directory.
-        _ensure_zarr_extension: Ensures the file name ends with ".zarr".
-        _update_completer: Updates the file name completer based on the selected directory.
-        _save_zarr: Saves the image and labels to a Zarr file.
-        _set_active_label: Converts active label layer to a numpy array if editable.
-        _convert_dask: Converts a Dask array to a numpy array.
-        _set_editable: Sets the labels layer to be editable.
-        _new_pts: Adds a new points layer to the viewer.
-        _convert_ch2z: Converts channel coordinates to z coordinates.
-        _split_channels: Splits the image channels into separate layers.
-        _scale_points: Scales the points coordinates based on image resolution.
-        _read_res: Reads the image resolution from the file metadata.
-        _read_tiff_voxel_size: Reads the voxel size from a TIFF file.
-        _rxy: Rotates the camera to the xy plane.
-        _auto_z: Automatically adjusts the z coordinates of points based on image intensity.
-        _change_z: Changes the z coordinates of selected points.
-        _set_max_label: Sets the maximum label value in the labels layer.
-        _remove_label: Removes a specified label from the labels layer.
-        _merge_labels: Merges two labels layers.
-        _labels2points: Converts labels to points based on their center of mass.
-        _points2labels: Converts points to labels using watershed segmentation.
-        _snap_to_max: Snaps points to the local maximum intensity.
-        _get_slices: Gets the slices for a given radius and location.
-        _dist_watershed_sep: Separates objects using distance transform and watershed segmentation.
-
+This module provides a custom QWidget class (GTWidget) for use with the napari viewer.
+It includes various functionalities to display synapse images, edit and create point and
+label annotations, interconvert between points and labels, and save data in as .zarr.
 """
 from typing import TYPE_CHECKING
 
@@ -91,7 +52,7 @@ class GTWidget(QWidget):
         xyresbox = QDoubleSpinBox()
         zresbox  = QDoubleSpinBox()
         splitbtn = QPushButton('Split channels')
-        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, active_image, 'Image'))
+        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
         
         _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
         _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
@@ -230,17 +191,16 @@ class GTWidget(QWidget):
         self.layout().addWidget(box5)
 
     def setup_labels_box(self):
-        self.labels_editable = False
         self.active_label = QComboBox()
         lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
-        self.active_label.currentTextChanged.connect(self._set_active_label)
-        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
-        _update_combos(self, self.active_label, 'Labels', set_index=-1)
-
+        
         # Label tools box ################################################################
         self.labcheck = QCheckBox("Make labels editable")
-        self.labcheck.setTristate(False); self.labcheck.setCheckState(self.labels_editable)
+        self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
         self.labcheck.stateChanged.connect(self._set_editable)
+        self.active_label.currentTextChanged.connect(self._set_editable)
+        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
+        _update_combos(self, self.active_label, 'Labels', set_index=-1)
 
         box4 = QGroupBox('Labels tools')
         self.labelbox = QSpinBox(); self.rem_label = 1
@@ -396,10 +356,6 @@ class GTWidget(QWidget):
                     zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['offset'] = [0,]*2
                     zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
 
-    def _set_active_label(self, name):     
-        if self.labels_editable:
-            self._convert_dask(self.active_label.currentText())
-    
     def _convert_dask(self, layer_name):
         try:
             self.viewer.layers[layer_name].data.chunks
@@ -408,12 +364,10 @@ class GTWidget(QWidget):
             return
         print('converting layer '+layer_name+' to numpy array')
         self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
-        self.labels_editable = True
         self.labcheck.setCheckState(2)
 
-    def _set_editable(self, state):
-        self.labels_editable = bool(state)
-        if self.labels_editable:
+    def _set_editable(self):
+        if self.labcheck.isChecked():
             try:
                 label = self.active_label.currentText()
             except:

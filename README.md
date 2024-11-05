@@ -1,11 +1,11 @@
-# cochlea-synapse-seg
+# cochlea-synapseg
 
-[![License BSD-3](https://img.shields.io/pypi/l/cochlea-synapse-seg.svg?color=green)](https://github.com/manorlabucsd/cochlea-synapse-seg/raw/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/cochlea-synapse-seg.svg?color=green)](https://pypi.org/project/cochlea-synapse-seg)
-[![Python Version](https://img.shields.io/pypi/pyversions/cochlea-synapse-seg.svg?color=green)](https://python.org)
-[![tests](https://github.com/manorlabucsd/cochlea-synapse-seg/workflows/tests/badge.svg)](https://github.com/manorlabucsd/cochlea-synapse-seg/actions)
-[![codecov](https://codecov.io/gh/manorlabucsd/cochlea-synapse-seg/branch/main/graph/badge.svg)](https://codecov.io/gh/manorlabucsd/cochlea-synapse-seg)
-[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/cochlea-synapse-seg)](https://napari-hub.org/plugins/cochlea-synapse-seg)
+[![License BSD-3](https://img.shields.io/pypi/l/cochlea-synapseg.svg?color=green)](https://github.com/manorlabucsd/cochlea-synapseg/raw/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/cochlea-synapseg.svg?color=green)](https://pypi.org/project/cochlea-synapseg)
+[![Python Version](https://img.shields.io/pypi/pyversions/cochlea-synapseg.svg?color=green)](https://python.org)
+[![tests](https://github.com/manorlabucsd/cochlea-synapseg/workflows/tests/badge.svg)](https://github.com/manorlabucsd/cochlea-synapseg/actions)
+[![codecov](https://codecov.io/gh/manorlabucsd/cochlea-synapseg/branch/main/graph/badge.svg)](https://codecov.io/gh/manorlabucsd/cochlea-synapseg)
+[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/cochlea-synapseg)](https://napari-hub.org/plugins/cochlea-synapseg)
 
 A plugin to segment cochlear ribbon synapses automatically, as well as edit and adjust
 
@@ -23,9 +23,9 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
-You can install `cochlea-synapse-seg` via [pip]:
+You can install `cochlea-synapseg` via [pip]:
 
-    pip install cochlea-synapse-seg
+    pip install cochlea-synapseg
 
 (this is not yet true, just clone repo and use "pip install -e ." for now)
 
@@ -38,7 +38,7 @@ the coverage at least stays the same before you submit a pull request.
 ## License
 
 Distributed under the terms of the [BSD-3] license,
-"cochlea-synapse-seg" is free and open source software
+"cochlea-synapseg" is free and open source software
 
 ## Issues
 

@@ -1,41 +1,41 @@
-name: cochlea-synapse-seg
-display_name: Cochlear Synapse Segmentation
+name: cochlea-synapseg
+display_name: Cochlea SynapSeg
 # use 'hidden' to remove plugin from napari hub search results
 visibility: public
 # see https://napari.org/stable/plugins/manifest.html for valid categories
 categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:
   commands:
-    - id: cochlea-synapse-seg.get_reader
+    - id: cochlea-synapseg.get_reader
       python_name: napari_cochlea_synapse_seg._reader:napari_get_reader
-      title: Open data with Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.write_multiple
+      title: Open data with Cochlea SynapSeg
+    - id: cochlea-synapseg.write_multiple
       python_name: napari_cochlea_synapse_seg._writer:write_multiple
-      title: Save multi-layer data with Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.write_single_image
+      title: Save multi-layer data with Cochlea SynapSeg
+    - id: cochlea-synapseg.write_single_image
       python_name: napari_cochlea_synapse_seg._writer:write_single_image
-      title: Save image data with Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.make_sample_data
+      title: Save image data with Cochlea SynapSeg
+    - id: cochlea-synapseg.make_sample_data
       python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data
-      title: Load sample data from Cochlear Synapse Segmentation
-    - id: cochlea-synapse-seg.make_gtwidget
+      title: Load sample data from Cochlea SynapSeg
+    - id: cochlea-synapseg.make_gtwidget
       python_name: napari_cochlea_synapse_seg:GTWidget
       title: Make GTWidget
   readers:
-    - command: cochlea-synapse-seg.get_reader
-      accepts_directories: false
-      filename_patterns: ['*.npy', '*.xml', '*.csv', '*.xls', '*.XLS']
+    - command: cochlea-synapseg.get_reader
+      accepts_directories: true
+      filename_patterns: ['*.zarr', '*.xml', '*.csv', '*.xls', '*.XLS']
   writers:
-    - command: cochlea-synapse-seg.write_multiple
+    - command: cochlea-synapseg.write_multiple
       layer_types: ['image*','labels*']
       filename_extensions: []
-    - command: cochlea-synapse-seg.write_single_image
+    - command: cochlea-synapseg.write_single_image
       layer_types: ['image']
       filename_extensions: ['.npy']
   sample_data:
-    - command: cochlea-synapse-seg.make_sample_data
-      display_name: Cochlear Synapse Segmentation
+    - command: cochlea-synapseg.make_sample_data
+      display_name: Cochlea SynapSeg
       key: unique_id.1
   widgets:
-    - command: cochlea-synapse-seg.make_gtwidget
-      display_name: Ground Truth Widget
+    - command: cochlea-synapseg.make_gtwidget
+      display_name: SynapSeg - Ground Truth Widget
