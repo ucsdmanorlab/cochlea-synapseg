@@ -1,10 +1,10 @@
 # cochlea-synapseg
 
-[![License BSD-3](https://img.shields.io/pypi/l/cochlea-synapseg.svg?color=green)](https://github.com/manorlabucsd/cochlea-synapseg/raw/main/LICENSE)
+[![License BSD-3](https://img.shields.io/pypi/l/cochlea-synapseg.svg?color=green)](https://github.com/ucsdmanorlab/cochlea-synapseg/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/cochlea-synapseg.svg?color=green)](https://pypi.org/project/cochlea-synapseg)
 [![Python Version](https://img.shields.io/pypi/pyversions/cochlea-synapseg.svg?color=green)](https://python.org)
-[![tests](https://github.com/manorlabucsd/cochlea-synapseg/workflows/tests/badge.svg)](https://github.com/manorlabucsd/cochlea-synapseg/actions)
-[![codecov](https://codecov.io/gh/manorlabucsd/cochlea-synapseg/branch/main/graph/badge.svg)](https://codecov.io/gh/manorlabucsd/cochlea-synapseg)
+[![tests](https://github.com/ucsdmanorlab/cochlea-synapseg/workflows/tests/badge.svg)](https://github.com/ucsdmanorlab/cochlea-synapseg/actions)
+[![codecov](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg/branch/main/graph/badge.svg)](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/cochlea-synapseg)](https://napari-hub.org/plugins/cochlea-synapseg)
 
 A plugin to segment cochlear ribbon synapses automatically, as well as edit and adjust
