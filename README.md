@@ -37,6 +37,8 @@ The ground truth widget is divided into multiple sections, for "quick use", be s
 
 ### Image Tools
 
+![image_tools](https://github.com/user-attachments/assets/323984ad-2cd3-4816-8ee5-e8b3f5063bc0)
+
 \***1. Image Layer Selection** - use the dropdown to select the name of your image layer (here, the layer that contains the ribbon stain)
 
 (First load a 3D image using one of napari's native readers, or using the Cochlea-Synapseg .zarr reader (reads a .zarr with '3d/raw' and '3d/labeled').)
@@ -48,6 +50,8 @@ The ground truth widget is divided into multiple sections, for "quick use", be s
 **4. Split channels** - splits multiple channels into separate image layers (useful for FIJI-saved .tif images)
 
 ### Points Tools & Points to Labels
+
+![points_tools](https://github.com/user-attachments/assets/6b271d5c-51c1-4ca4-b3c0-683dddd69dc8)
 
 **5. Points Layer Selection and Refresh** - use the dropdown to select an existing points layer, use the refresh button to update the list (or skip to #8 if not loading in existing points)
 
@@ -69,6 +73,8 @@ The ground truth widget is divided into multiple sections, for "quick use", be s
 
 ### Labels Tools
 
+![labels_tools](https://github.com/user-attachments/assets/6ef20ff6-61e2-4337-a177-8f957a67fb39)
+
 **15. Lables Layer Selection and Refresh** - use the dropdown to select an existing labels layer, use the refresh button to update the list
 
 **16. Make Labels Editable** - zarrs and other file formats tend to load in as dask arrays, which don't allow editing. Checking this box will make the labels layer editable by converting to a numpy array (will load the layer into memory, so be careful if dealing with large images!). This will allow you to edit the labels layer with tools like the paintbrush and eraser. Automatically enables if merging or removing labels is requested (see #17 and #19)
@@ -82,6 +88,9 @@ The ground truth widget is divided into multiple sections, for "quick use", be s
 **20. Labels to Points** - if wanted, you can take all your existing labels and convert them to a points layer based on their centroids. This may be helpful for quickly generating better labels using the points tools above. 
 
 ### Save to Zarr
+
+![save_zarr](https://github.com/user-attachments/assets/1d824f49-012f-4fac-8fa1-64d7d319cd34)
+
 Functionality to save to .zarr format. Saves image as '3d/raw' and labels as '3d/labeled'. Used for later auto-segmentation of ribbons (not live in this plugin yet, but coming soon!). 
 
 \***21. File Path** - the directory in which to save the zarr; use the folder icon to search for an existing directory
