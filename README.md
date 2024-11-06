@@ -25,7 +25,7 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
-You can install `cochlea-synapseg` via [pip]:
+You can install `cochlea-synapseg` (receommended: in a new conda environment with up-to-date napari) via [pip]:
 
     python -m pip install cochlea-synapseg
 
