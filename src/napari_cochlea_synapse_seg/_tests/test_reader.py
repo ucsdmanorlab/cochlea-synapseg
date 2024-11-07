@@ -1,5 +1,6 @@
 import numpy as np
-
+import zarr
+from scipy.ndimage import zoom
 from napari_cochlea_synapse_seg import napari_get_reader
 
 
@@ -8,9 +9,19 @@ def test_reader(tmp_path):
     """An example of how you might test your plugin."""
 
     # write some fake data using your supported file format
-    my_test_file = str(tmp_path / "myfile.npy")
-    original_data = np.random.rand(20, 20)
-    np.save(my_test_file, original_data)
+    my_test_file = str(tmp_path / "myfile.zarr")
+    img_data = np.random.rand(6, 20, 20)
+    label_data = zoom(
+        np.random.randint(2, 4, 4),
+        (3, 5, 5)
+    )
+    f = zarr.open(my_test_file, 'w')
+    f['3d/raw'] = img_data
+    f['3d/raw'].attrs['resolution'] = [1, 1, 1]
+    f['3d/raw'].attrs['offset'] = [0, 0, 0]
+    f['3d/labeled'] = label_data
+    f['3d/labeled'].attrs['resolution'] = [1, 1, 1]
+    f['3d/labeled'].attrs['offset'] = [0, 0, 0]
 
     # try to read it back in
     reader = napari_get_reader(my_test_file)
@@ -21,10 +32,12 @@ def test_reader(tmp_path):
     assert isinstance(layer_data_list, list) and len(layer_data_list) > 0
     layer_data_tuple = layer_data_list[0]
     assert isinstance(layer_data_tuple, tuple) and len(layer_data_tuple) > 0
+    layer_data_tuple = layer_data_list[1]
+    assert isinstance(layer_data_tuple, tuple) and len(layer_data_tuple) > 0
 
     # make sure it's the same as it started
-    np.testing.assert_allclose(original_data, layer_data_tuple[0])
-
+    np.testing.assert_allclose(img_data, layer_data_tuple[0])
+    np.testing.assert_allclose(label_data, layer_data_tuple[1])
 
 def test_get_reader_pass():
     reader = napari_get_reader("fake.file")
