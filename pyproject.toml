@@ -26,9 +26,10 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "numpy",
-    "magicgui",
     "qtpy",
     "scikit-image",
+    "scipy",
+    "zarr",
 ]
 
 [project.optional-dependencies]
