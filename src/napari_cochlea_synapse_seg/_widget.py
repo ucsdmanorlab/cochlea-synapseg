@@ -214,6 +214,7 @@ class GTWidget(QWidget):
         lab2_refreshbtn = QPushButton("\u27F3"); lab2_refreshbtn.setToolTip("Refresh")
         mlsbtn = QPushButton("Merge labels")        
         l2pbtn = QPushButton("Labels to points")
+        selectLabelsbtn = QPushButton("Keep labels from points")
 
         lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels'))
         mlsbtn.clicked.connect(self._merge_labels)
@@ -222,6 +223,7 @@ class GTWidget(QWidget):
         removebtn.clicked.connect(self._remove_label)
         l2pbtn.clicked.connect(self._labels2points)
         l2pbtn.clicked.connect(lambda: _update_combos(self, self.active_points, 'Points'))
+        selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
         _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
 
         labels_gbox = QGridLayout()
@@ -237,6 +239,7 @@ class GTWidget(QWidget):
         labels_gbox.addWidget(lab2_refreshbtn, 5, 2)
         labels_gbox.addWidget(mlsbtn, 5, 0, 1, 2)
         labels_gbox.addWidget(l2pbtn, 6, 0, 1, 2)
+        labels_gbox.addWidget(selectLabelsbtn, 7, 0, 1, 2)
 
         box4.setLayout(labels_gbox)
 
@@ -518,6 +521,29 @@ class GTWidget(QWidget):
             self.labelbox.setMaximum(maxL)
             self.maxlab.setText("max label: "+str(maxL))
         
+    def _remove_labels_wo_points(self):
+        should_break=False
+        try:
+            labels = self.viewer.layers[self.active_label.currentText()]
+        except:
+            print("Labels layer not defined.")
+            should_break = True
+        try:
+            points = self.viewer.layers[self.active_points.currentText()]
+        except:
+            print("Points layer not defined.")
+            should_break = True
+        if should_break:
+            return
+        
+        mask = np.zeros_like(labels.data)
+        for pt in points.data:
+            selected_label = labels.data[tuple([int(i) for i in pt])]
+            mask[labels.data==selected_label] = selected_label
+
+        self.viewer.add_labels(mask, name='selected '+self.active_label.currentText())
+
+
     def _remove_label(self):
         should_break=False
         try:
