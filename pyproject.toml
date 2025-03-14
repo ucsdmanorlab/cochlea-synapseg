@@ -30,6 +30,8 @@ dependencies = [
     "scikit-image",
     "scipy",
     "zarr",
+    "napari[all]",
+    "gunpowder",
 ]
 
 [project.optional-dependencies]

@@ -21,6 +21,9 @@ contributions:
     - id: cochlea-synapseg.make_gtwidget
       python_name: napari_cochlea_synapse_seg:GTWidget
       title: Make GTWidget
+    - id: cochlea-synapseg.make_bigwidget
+      python_name: napari_cochlea_synapse_seg:SynapSegWidget
+      title: Make SynapSegWidget
   readers:
     - command: cochlea-synapseg.get_reader
       accepts_directories: true
@@ -39,3 +42,6 @@ contributions:
   widgets:
     - command: cochlea-synapseg.make_gtwidget
       display_name: SynapSeg - Ground Truth Widget
+    - command: cochlea-synapseg.make_bigwidget
+      display_name: SynapSeg Widget
+
