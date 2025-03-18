@@ -5,7 +5,7 @@ label annotations, interconvert between points and labels, and save data in as .
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QTabWidget, QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
+from qtpy.QtWidgets import QTabWidget, QScrollArea, QScrollBar, QVBoxLayout, QWidget
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
@@ -30,13 +30,31 @@ class SynapSegWidget(QWidget):
         self.init_ui()
     
     def init_ui(self):
-        self.setLayout(QVBoxLayout())
         tab_widget = QTabWidget()
-        tab1 = GTWidget(viewer=self.viewer)
-        tab2 = PredWidget(viewer=self.viewer)
-        #QWidget()
-
+        tab1 = self._init_scroll(GTWidget(viewer=self.viewer))
+        tab2 = self._init_scroll(PredWidget(viewer=self.viewer))
+        
         tab_widget.addTab(tab1, "Ground Truth")
         tab_widget.addTab(tab2, "Predict")
+        self.setLayout(QVBoxLayout())
         self.layout().addWidget(tab_widget)
+
+    def _init_scroll(self, widget):
+        #scrollbox = QVBoxLayout(self)
+        #self.setLayout(scrollbox)
+
+        scrollarea = QScrollArea(self)
+        scrollarea.setWidgetResizable(True)
+
+        #self.layout().addWidget(scrollarea)
+        
+        scrollContent = QWidget(scrollarea)
+        scrollLayout = QVBoxLayout(scrollContent)
+        scrollContent.setLayout(scrollLayout)
+
+        scrollLayout.addWidget(widget)
+        scrollarea.setWidget(scrollContent)
+
+        return scrollarea
+
 

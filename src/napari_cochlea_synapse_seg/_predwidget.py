@@ -12,9 +12,8 @@ from skimage.measure import label, regionprops_table
 from skimage.segmentation import watershed
 from skimage.util import map_array
 
-from napari.layers.utils.stack_utils import stack_to_images
-
 from ._reader import napari_get_reader
+from ._predict import predict
 import os
 import numpy as np
 import zarr
@@ -31,8 +30,47 @@ class PredWidget(QWidget):
 
     def init_ui(self):
         self.setLayout(QVBoxLayout())
+        self.setup_predict_box()
         self.setup_pred2label_box()
-        self.setup_save_box()
+
+    def setup_predict_box(self):
+
+        pred_btn = QPushButton('Predict')
+        pred_btn.clicked.connect(self._predict); 
+        show_btn = QPushButton('Show')
+        show_btn.clicked.connect(self._show_pred)
+        prednshow_btn = QPushButton('Predict and Show')
+        prednshow_btn.clicked.connect(lambda: [self._predict(), self._show_pred()])
+
+        browse_model_button = QPushButton("\uD83D\uDD0D"); browse_model_button.setToolTip("Find model file")
+        browse_image_button = QPushButton("\uD83D\uDD0D"); browse_image_button.setToolTip("Find image .zarr file")
+        
+        self.model_path_input = QLineEdit(self)
+        self.zarr_path_input = QLineEdit(self)
+        browse_model_button.clicked.connect(self._browse_for_model)
+        browse_image_button.clicked.connect(self._browse_for_zarr_input)
+        #self.model_path_input.textChanged.connect(self._update_completer)
+        #self.zarr_path_input.textChanged.connect(self._update_completer)
+        
+        box = QGroupBox('Predict')
+        box.setLayout(QVBoxLayout())
+        box2 = QGroupBox('Model path'); box2.setLayout(QHBoxLayout())
+        box2.layout().addWidget(self.model_path_input)
+        box2.layout().addWidget(browse_model_button)
+        box3 = QGroupBox('Input .zarr path'); box3.setLayout(QHBoxLayout())
+        box3.layout().addWidget(self.zarr_path_input)
+        box3.layout().addWidget(browse_image_button)
+        
+        box.layout().addWidget(box2)
+        box.layout().addWidget(box3)
+        
+        # box.layout().addWidget(QLabel('Input image:'), 1, 0)
+        # box.layout().addWidget(self.input_image, 1, 1)
+        # box.layout().addWidget(img_refreshbtn, 1, 2)
+        box.layout().addWidget(pred_btn)#, 2, 0, 1, 3)
+        box.layout().addWidget(show_btn)
+        box.layout().addWidget(prednshow_btn)
+        self.layout().addWidget(box)
 
     def setup_pred2label_box(self):
         self.mask_thresh = 0.0
@@ -81,41 +119,30 @@ class PredWidget(QWidget):
         box2.setLayout(p2l_gbox)
 
         self.layout().addWidget(box2)
-
-    def setup_save_box(self):
-        box6 = QGroupBox('Save zarr')
-        save3Dbtn = QPushButton("Save 3D only")
-        save23Dbtn = QPushButton("Save 2D and 3D")
-        browse_dir_button = QPushButton("\uD83D\uDCC1"); browse_dir_button.setToolTip("Browse for directory")
-        browse_zarr_button = QPushButton("\uD83D\uDD0D"); browse_zarr_button.setToolTip("Find existing zarr")
-        from_source_button = QPushButton("from source"); from_source_button.setToolTip("Select location from raw source");
-        
-        self.file_path_input = QLineEdit(self)
-        self.file_name_input = QLineEdit(self)
-
-        browse_dir_button.clicked.connect(self._browse_for_path)
-        browse_zarr_button.clicked.connect(self._browse_for_zarr)
-        self.file_name_input.editingFinished.connect(self._ensure_zarr_extension)
-        self.file_path_input.textChanged.connect(self._update_completer)
-        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
-        save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
-        from_source_button.clicked.connect(self._path_from_raw_source)
-
-        box6.setLayout(QGridLayout())
-        box6a = QGroupBox('File path'); box6a.setLayout(QHBoxLayout())
-        box6a.layout().addWidget(self.file_path_input)
-        box6a.layout().addWidget(browse_dir_button)
-        box6.layout().addWidget(box6a, 0, 0, 1, 2)
-        box6b = QGroupBox('File name'); box6b.setLayout(QHBoxLayout())
-        box6b.layout().addWidget(self.file_name_input)
-        box6b.layout().addWidget(browse_zarr_button)
-        box6.layout().addWidget(box6b, 1, 0, 1, 2)        
-        box6.layout().addWidget(from_source_button, 2, 0, 1, 2)
-        box6.layout().addWidget(save3Dbtn, 3, 0, 1, 1)
-        box6.layout().addWidget(save23Dbtn, 3, 1, 1, 1)
-
-        self.layout().addWidget(box6)
     
+    def _predict(self):
+        pred = predict(
+            self.model_path_input.text(),
+            self.zarr_path_input.text(),
+            f'raw') 
+        
+        zarrfi = zarr.open(self.zarr_path_input.text())
+        
+        zarrfi['pred'] = pred
+        zarrfi['pred'].attrs['offset'] = [0,]*3
+        zarrfi['pred'].attrs['resolution'] = [1,]*3
+    
+    def _show_pred(self):
+        zarrfi = zarr.open(self.zarr_path_input.text())
+        self.viewer.add_image(zarrfi['raw'], name='input')
+        self.viewer.add_image(zarrfi['pred'], name='prediction')
+
+    def _browse_for_model(self):
+        model_file = QFileDialog.getOpenFileName(self, "Select Model File")
+        print(model_file)
+        if model_file[0]:
+            self.model_path_input.setText(model_file[0])
+
     def _path_from_raw_source(self):
         raw_path = self.viewer.layers[self.active_image.currentText()].source.path
 
@@ -141,6 +168,11 @@ class PredWidget(QWidget):
             directory, zarrfi = os.path.split(directory)
             self.file_path_input.setText(directory)
             self.file_name_input.setText(zarrfi)
+
+    def _browse_for_zarr_input(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select .zarr with raw inside")
+        if directory:
+            self.zarr_path_input.setText(directory)
 
     def _ensure_zarr_extension(self):
         file_name = self.file_name_input.text()
@@ -192,13 +224,14 @@ class PredWidget(QWidget):
                     zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
 
     def _convert_dask(self, layer_name):
+        # check if is dask array
         try:
             self.viewer.layers[layer_name].data.chunks
         except:
             # not a dask
             return
         print('converting layer '+layer_name+' to numpy array')
-        self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
+        self.viewer.layers[layer_name].data = np.array(self.viewer.layers[layer_name].data)
 
     def _pred2labels(self):
         try:

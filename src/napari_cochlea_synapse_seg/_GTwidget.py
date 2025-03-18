@@ -250,8 +250,8 @@ class GTWidget(QWidget):
 
     def setup_save_box(self):
         box6 = QGroupBox('Save zarr')
-        save3Dbtn = QPushButton("Save 3D only")
-        save23Dbtn = QPushButton("Save 2D and 3D")
+        save3Dbtn = QPushButton("Save zarr")
+        #save23Dbtn = QPushButton("Save 2D and 3D")
         browse_dir_button = QPushButton("\uD83D\uDCC1"); browse_dir_button.setToolTip("Browse for directory")
         browse_zarr_button = QPushButton("\uD83D\uDD0D"); browse_zarr_button.setToolTip("Find existing zarr")
         from_source_button = QPushButton("from source"); from_source_button.setToolTip("Select location from raw source");
@@ -263,22 +263,22 @@ class GTWidget(QWidget):
         browse_zarr_button.clicked.connect(self._browse_for_zarr)
         self.file_name_input.editingFinished.connect(self._ensure_zarr_extension)
         self.file_path_input.textChanged.connect(self._update_completer)
-        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=False))
-        save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
+        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=False, twoD=False))
+        #save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
         from_source_button.clicked.connect(self._path_from_raw_source)
 
-        box6.setLayout(QGridLayout())
+        box6.setLayout(QVBoxLayout())
         box6a = QGroupBox('File path'); box6a.setLayout(QHBoxLayout())
         box6a.layout().addWidget(self.file_path_input)
         box6a.layout().addWidget(browse_dir_button)
-        box6.layout().addWidget(box6a, 0, 0, 1, 2)
+        box6.layout().addWidget(box6a)
         box6b = QGroupBox('File name'); box6b.setLayout(QHBoxLayout())
         box6b.layout().addWidget(self.file_name_input)
         box6b.layout().addWidget(browse_zarr_button)
-        box6.layout().addWidget(box6b, 1, 0, 1, 2)        
-        box6.layout().addWidget(from_source_button, 2, 0, 1, 2)
-        box6.layout().addWidget(save3Dbtn, 3, 0, 1, 1)
-        box6.layout().addWidget(save23Dbtn, 3, 1, 1, 1)
+        box6.layout().addWidget(box6b)        
+        box6.layout().addWidget(from_source_button)
+        box6.layout().addWidget(save3Dbtn)
+        #box6.layout().addWidget(save23Dbtn, 3, 1, 1, 1)
 
         #self.layout().addWidget(box1)
         self.layout().addWidget(box6)
@@ -330,11 +330,20 @@ class GTWidget(QWidget):
         # TODO: ensure fileName ends with .zarr
 
         zarrfi = zarr.open(fileName)
+        try:
+            raw = self.viewer.layers[self.active_image.currentText()].data
+        except:
+            print("Image layer not defined.")
+            raw = None
+        try:
+            labels = self.viewer.layers[self.active_label.currentText()].data
+        except:
+            print("Labels layer not defined.")
+            labels = None
 
-        raw = self.viewer.layers[self.active_image.currentText()].data
-        labels = self.viewer.layers[self.active_label.currentText()].data
-
-        for (name, data) in (('raw', raw), ('labeled', labels)):
+        for (name, data, process_func) in (('raw', raw, self._process_raw), ('labeled', labels, self._process_labels)):
+            if data is None:
+                continue
             is_dask=True
             try:
                 data.chunks
@@ -348,7 +357,7 @@ class GTWidget(QWidget):
                     zarrfi[os.path.join('3d', f'{name}')] = data
                 zarrfi[os.path.join('3d', f'{name}')].attrs['offset'] = [0,]*3
                 zarrfi[os.path.join('3d', f'{name}')].attrs['resolution'] = [1,]*3
-
+            
             if twoD:
                 for z in range(data.shape[0]):
                     if is_dask:
@@ -357,6 +366,21 @@ class GTWidget(QWidget):
                         zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0)
                     zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['offset'] = [0,]*2
                     zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
+            
+            if not threeD and not twoD:
+                if is_dask:
+                    zarrfi[f'{name}'] = process_func(data.compute())
+                else:
+                    zarrfi[f'{name}'] = process_func(data)
+                zarrfi[f'{name}'].attrs['offset'] = [0,]*3
+                zarrfi[f'{name}'].attrs['resolution'] = [1,]*3
+
+    def _process_raw(self, rawdata):
+        return normalize(rawdata.astype(np.uint16), 
+                maxval=(2**16-1)).astype(np.uint16)
+
+    def _process_labels(self, labeldata):
+        return labeldata.astype(np.int64)
 
     def _convert_dask(self, layer_name):
         try:
@@ -834,3 +858,10 @@ def _update_combos(curr_class,
             combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
         elif rememberID>=0 and rememberID < count:
             combobox.setCurrentIndex(rememberID)
+
+def normalize(data, maxval=1., dtype=np.uint16):
+    data = data.astype(dtype)
+    data_norm = data - data.min()
+    scale_fact = maxval/data_norm.max()
+    data_norm = data_norm * scale_fact
+    return data_norm.astype(dtype)

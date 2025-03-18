@@ -32,6 +32,10 @@ dependencies = [
     "zarr",
     "napari[all]",
     "gunpowder",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "funlib.learn.torch @ git+https://github.com/funkelab/funlib.learn.torch.git",
 ]
 
 [project.optional-dependencies]
