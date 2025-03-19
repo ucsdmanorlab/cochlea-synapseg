@@ -25,7 +25,7 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
-You can install `cochlea-synapseg` (receommended: in a new conda environment with up-to-date napari) via [pip]:
+You can install `cochlea-synapseg` (recommended: in a new conda environment with up-to-date napari) via [pip]:
 
     python -m pip install cochlea-synapseg
 
@@ -129,6 +129,7 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
 [Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
 [cookiecutter-napari-plugin]: https://github.com/napari/cookiecutter-napari-plugin
+[file an issue]: https://github.com/ucsdmanorlab/cochlea-synapseg/issues/new
 
 [napari]: https://github.com/napari/napari
 [tox]: https://tox.readthedocs.io/en/latest/

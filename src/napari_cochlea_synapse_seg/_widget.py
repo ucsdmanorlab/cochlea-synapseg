@@ -40,14 +40,9 @@ class SynapSegWidget(QWidget):
         self.layout().addWidget(tab_widget)
 
     def _init_scroll(self, widget):
-        #scrollbox = QVBoxLayout(self)
-        #self.setLayout(scrollbox)
-
         scrollarea = QScrollArea(self)
         scrollarea.setWidgetResizable(True)
 
-        #self.layout().addWidget(scrollarea)
-        
         scrollContent = QWidget(scrollarea)
         scrollLayout = QVBoxLayout(scrollContent)
         scrollContent.setLayout(scrollLayout)
