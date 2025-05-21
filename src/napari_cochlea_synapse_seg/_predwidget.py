@@ -87,13 +87,14 @@ class PredWidget(QWidget):
         box2 = QGroupBox('Labels from prediction')
         
         mask_thresh_box = QDoubleSpinBox()
+        show_mask_btn = QPushButton('Show mask')
         peak_thresh_box  = QDoubleSpinBox()
+        show_peaks_btn = QPushButton('Show peaks')
         sig_xy_box = QDoubleSpinBox()
         sig_z_box = QDoubleSpinBox()
         size_filt_box = QSpinBox()
 
         pred2label_btn = QPushButton('Prediction to labels')
-        pred2label_btn.clicked.connect(self._pred2labels); 
         
         _setup_spin(self, mask_thresh_box,  minval=-1, maxval=1, val=self.mask_thresh, step=0.05, attrname='mask_thresh', dec=2, dtype=float)
         _setup_spin(self, peak_thresh_box,  minval=-1, maxval=1, val=self.peak_thresh, step=0.05, attrname='peak_thresh', dec=2, dtype=float)
@@ -101,13 +102,19 @@ class PredWidget(QWidget):
         _setup_spin(self, sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float)
         _setup_spin(self, size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int)
 
+        show_mask_btn.clicked.connect(lambda: self.viewer.add_image(self.viewer.layers[self.active_image.currentText()].data>self.mask_thresh, name='mask - '+str(self.mask_thresh)))
+        show_peaks_btn.clicked.connect(lambda: self.viewer.add_points((self._get_peaks()), name='peaks - '+str(self.peak_thresh), size=5))
+        pred2label_btn.clicked.connect(self._pred2labels); 
+
         p2l_gbox = QGridLayout()
         p2l_gbox.addWidget(QLabel('pred layer:'), 0, 0) ; p2l_gbox.addWidget(self.active_image, 0, 1)
         p2l_gbox.addWidget(img_refreshbtn, 0, 2)
         p2l_gbox.addWidget(QLabel('mask threshold:'), 1, 0) 
         p2l_gbox.addWidget(mask_thresh_box, 1, 1)
+        p2l_gbox.addWidget(show_mask_btn, 1, 2)
         p2l_gbox.addWidget(QLabel('peak threshold:'), 2, 0)
         p2l_gbox.addWidget(peak_thresh_box, 2, 1)
+        p2l_gbox.addWidget(show_peaks_btn, 2, 2)
         p2l_gbox.addWidget(QLabel('sigma xy:'), 3, 0)
         p2l_gbox.addWidget(sig_xy_box, 3, 1)
         p2l_gbox.addWidget(QLabel('sigma z:'), 4, 0)
@@ -232,7 +239,30 @@ class PredWidget(QWidget):
             return
         print('converting layer '+layer_name+' to numpy array')
         self.viewer.layers[layer_name].data = np.array(self.viewer.layers[layer_name].data)
+    
+    def _get_peaks(self):
+        try:
+            img_layer = self.viewer.layers[self.active_image.currentText()]
+        except:
+            print("Image layer not defined.")
+            return
+        self._convert_dask(self.active_image.currentText())
+        img = img_layer.data
 
+        blur_sig = [self.sig_z, self.sig_xy, self.sig_xy]
+        if np.any(blur_sig):
+            dist_map = gaussian_filter(img, blur_sig)
+        else:
+            dist_map = img
+        
+        coords = peak_local_max(
+                    dist_map,
+                    footprint=np.ones((3, 3, 3)),
+                    threshold_abs=self.peak_thresh,
+                    min_distance=2,
+                    )
+        print(coords.shape)
+        return coords
     def _pred2labels(self):
         try:
             img_layer = self.viewer.layers[self.active_image.currentText()]

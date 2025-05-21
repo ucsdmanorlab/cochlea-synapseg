@@ -59,7 +59,9 @@ def predict(
     model = torch.nn.Sequential(
             unet,
             ConvPass(num_fmaps, 1, [[1,]*3], activation='Tanh'))
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    model.to(device)
+ 
     source = gp.ZarrSource(
         raw_file,
             {

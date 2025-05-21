@@ -121,6 +121,7 @@ class GTWidget(QWidget):
         self.blur_sig_xy = 0.7
         self.blur_sig_z = 0.5
         self.solidity_thresh = 0.8
+        self.threshold = 0.5
 
         box5b = QGroupBox('Advanced settings')
         radxybox = QSpinBox(); 
@@ -131,6 +132,7 @@ class GTWidget(QWidget):
         sigxybox = QDoubleSpinBox(); 
         sigzbox = QDoubleSpinBox(); 
         solidbox = QDoubleSpinBox();
+        threshbox = QDoubleSpinBox();
         wshedcombo = QComboBox();
         self.wshed_type = 'Image'
 
@@ -142,6 +144,7 @@ class GTWidget(QWidget):
         _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
         _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
         _setup_spin(self, solidbox,  minval=0, maxval=1, val=self.solidity_thresh, step=0.05, attrname='solidity_thresh', dtype=float)
+        _setup_spin(self, threshbox,  minval=0, maxval=1, val=self.threshold, step=0.05, attrname='threshold', dtype=float)
         wshedcombo.addItem('Image'); wshedcombo.addItem('Distance')
         wshedcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'wshed_type'))
 
@@ -170,7 +173,8 @@ class GTWidget(QWidget):
         gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(sigxybox, 5, 1)
         gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(sigzbox, 6, 1)
         gbox5b.addWidget(QLabel('solidity:'), 7, 0); gbox5b.addWidget(solidbox, 7, 1)
-        gbox5b.addWidget(QLabel('watershed type:'), 8, 0); gbox5b.addWidget(wshedcombo, 8, 1)
+        gbox5b.addWidget(QLabel('threshold:'), 8, 0); gbox5b.addWidget(threshbox, 8, 1)
+        gbox5b.addWidget(QLabel('watershed type:'), 9, 0); gbox5b.addWidget(wshedcombo, 9, 1)
         box5b.setLayout(gbox5b)
 
         p2l_gbox = QGridLayout()
@@ -704,10 +708,11 @@ class GTWidget(QWidget):
             local_max = np.max(subim) # background
             
             # threshold:
-            thresh = 0.5*local_min + 0.5*local_max 
+            thresh = self.threshold*local_min+(1-self.threshold)*local_max 
+            #print(local_min, local_max, thresh)
             if thresh < pointIntensity:
                 #print("threshold overriden for spot "+str(j)+" "+str(thresh)+" "+str(pointIntensity))
-                thresh = 0.5*local_max + 0.5*pointIntensity
+                thresh = self.threshold*pointIntensity+(1-self.threshold)*local_max 
             subim_mask = subim <= thresh
             
             # check for multiple objects:
@@ -717,17 +722,18 @@ class GTWidget(QWidget):
                 subim_mask = sublabels == wantLabel
                 
                 # recheck max:
-                thresh2 = 0.5*np.min(subim[subim_mask]) + 0.5*np.max(subim)
+                thresh2 = self.threshold*np.min(subim[subim_mask])+(1-self.threshold)*local_max
                 if thresh < thresh2:
                     subim_mask = subim <= thresh2
                     sublabels = label(subim_mask)
                     wantLabel = sublabels[tuple(rel_pos)]
                     subim_mask = sublabels == wantLabel
             
-            pt_solidity = regionprops(subim_mask.astype('int'))[0].solidity
+            if self.solidity_thresh > 0:
+                pt_solidity = regionprops(subim_mask.astype('int'))[0].solidity
             
-            if pt_solidity < self.solidity_thresh:
-                subim_mask = self._dist_watershed_sep(subim_mask, rel_pos)
+                if pt_solidity < self.solidity_thresh:
+                    subim_mask = self._dist_watershed_sep(subim_mask, rel_pos)
             submask = mask[zrange, yrange, xrange]
             submask = np.logical_or(submask, subim_mask)
 
