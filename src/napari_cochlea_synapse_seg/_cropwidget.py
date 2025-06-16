@@ -27,7 +27,7 @@ class CropWidget(QWidget):
         self.crop_size_spin = QSpinBox()
         self.crop_size_spin.setMinimum(5)
         self.crop_size_spin.setMaximum(512)
-        self.crop_size_spin.setValue(32)
+        self.crop_size_spin.setValue(16)
         crop_layout.addWidget(self.crop_size_spin)
         layout.addLayout(crop_layout)
 
@@ -35,13 +35,30 @@ class CropWidget(QWidget):
         self.crop_size_z_spin = QSpinBox()
         self.crop_size_z_spin.setMinimum(1)
         self.crop_size_z_spin.setMaximum(512)
-        self.crop_size_z_spin.setValue(16)
+        self.crop_size_z_spin.setValue(8)
         crop_z_layout.addWidget(QLabel("Crop size (Z):"))
         crop_z_layout.addWidget(self.crop_size_z_spin)
         layout.addLayout(crop_z_layout)
 
+        sort_layout = QHBoxLayout()
+        sort_layout.addWidget(QLabel("Sort by:"))
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Label ID", "Size", "X", "Y", "Z", "Layer 1 Intensity", "Layer 2 Intensity"])
+        sort_layout.addWidget(self.sort_combo)
+        layout.addLayout(sort_layout)
+
         self.crop_btn = QPushButton("Create Montage")
         layout.addWidget(self.crop_btn)
+
+        # add zoom to label functionality:
+        self.label_id = QSpinBox()
+        self.label_id.setMinimum(1)
+        self.label_id.setMaximum(1000000)
+        self.label_id.setValue(1)
+        layout.addWidget(self.label_id)
+        self.zoom_to_label_btn = QPushButton("Zoom to Label")
+        layout.addWidget(self.zoom_to_label_btn)
+
 
         self.setLayout(layout)
 
@@ -50,6 +67,7 @@ class CropWidget(QWidget):
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
 
         self.crop_btn.clicked.connect(self.create_montage)
+        self.zoom_to_label_btn.clicked.connect(self.zoom_to_label)
 
     def update_layer_choices(self, event=None):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
@@ -71,6 +89,26 @@ class CropWidget(QWidget):
             self.img2_combo.setCurrentText(img2_choice)
         if labels_choice in label_layers:   
             self.labels_combo.setCurrentText(labels_choice)
+    def zoom_to_label(self):
+        label_id = self.label_id.value()
+        labels_layer = self.viewer.layers[self.labels_combo.currentText()]
+        labels_data = labels_layer.data
+
+        if label_id < 1 or label_id > labels_data.max():
+            return
+
+        props = regionprops(labels_data)
+        for prop in props:
+            if prop.label == label_id:
+                if labels_data.ndim == 3:
+                    z, y, x = np.round(prop.centroid).astype(int)
+                    self.viewer.camera.zoom = 10
+                    self.viewer.camera.center = (z, y, x)
+                else:
+                    y, x = np.round(prop.centroid).astype(int)
+                    self.viewer.camera.zoom = 10
+                    self.viewer.camera.center = (y, x)
+                break
 
     def create_montage(self):
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
@@ -82,6 +120,8 @@ class CropWidget(QWidget):
         props = regionprops(labels)
         crops1 = []
         crops2 = []
+        sortby = []
+        ids = []
 
         is_3d = labels.ndim == 3
 
@@ -106,7 +146,26 @@ class CropWidget(QWidget):
                 crop2 = img2[..., y0:y1, x0:x1]
             crops1.append(crop1)
             crops2.append(crop2)
-
+            # sort by the selected property
+            if self.sort_combo.currentText() == "Label ID":
+                sortby.append(prop.label)
+            elif self.sort_combo.currentText() == "X":
+                sortby.append(x)
+            elif self.sort_combo.currentText() == "Y":
+                sortby.append(y)
+            elif self.sort_combo.currentText() == "Z": 
+                if is_3d:
+                    sortby.append(z)
+                else:
+                    sortby.append(0)
+            elif self.sort_combo.currentText() == "Size":
+                sortby.append(prop.area)
+            elif self.sort_combo.currentText() == "Layer 1 Intensity":
+                sortby.append(np.mean(crop1))
+            elif self.sort_combo.currentText() == "Layer 2 Intensity":
+                sortby.append(np.mean(crop2))
+            ids.append(prop.label)
+        
         n = len(crops1)
         if n == 0:
             return
@@ -118,7 +177,9 @@ class CropWidget(QWidget):
                 pad_x = shape[2] - crop.shape[-1]
                 return np.pad(
                     crop,
-                    [(0, 0)] * (crop.ndim - 3) + [(0, pad_z), (0, pad_y), (0, pad_x)],
+                    ((pad_z//2, pad_z-pad_z//2),
+                        (pad_y//2, pad_y-pad_y//2),
+                        (pad_x//2, pad_x-pad_x//2)),
                     mode='constant'
                 )
             else:
@@ -126,7 +187,8 @@ class CropWidget(QWidget):
                 pad_x = shape[1] - crop.shape[-1]
                 return np.pad(
                     crop,
-                    [(0, 0)] * (crop.ndim - 2) + [(0, pad_y), (0, pad_x)],
+                    ((pad_y//2, pad_y-pad_y//2),
+                        (pad_x//2, pad_x-pad_x//2)),
                     mode='constant'
                 )
 
@@ -134,8 +196,13 @@ class CropWidget(QWidget):
             target_shape = (crop_size_z, crop_size, crop_size)
             crops1 = [pad_crop(c, target_shape) for c in crops1]
             crops2 = [pad_crop(c, target_shape) for c in crops2]
-            # Concatenate along x axis (last axis)
-            # create grid of crops:
+            # Sort by area:
+            sorted_indices = np.argsort(sortby)
+            if self.sort_combo.currentText() in ["Size", "Layer 1 Intensity", "Layer 2 Intensity"]:
+                sorted_indices = sorted_indices[::-1]
+            crops1 = [crops1[i] for i in sorted_indices]
+            crops2 = [crops2[i] for i in sorted_indices]
+
             nrows = int(np.ceil(np.sqrt(n)))
             ncols = int(np.ceil(n / nrows))
 
@@ -144,6 +211,7 @@ class CropWidget(QWidget):
                     (crop_shape[0], nrows * crop_shape[1], ncols * crop_shape[2]),
                     dtype=crops[0].dtype
                 )
+                cents = []
                 for idx, crop in enumerate(crops):
                     row = idx // ncols
                     col = idx % ncols
@@ -152,13 +220,30 @@ class CropWidget(QWidget):
                         row * crop_shape[1]:(row + 1) * crop_shape[1],
                         col * crop_shape[2]:(col + 1) * crop_shape[2]
                     ] = crop
-                return grid
+                    cents.append([crop_shape[0]/2, row * crop_shape[1] + crop_shape[1] // 2, col * crop_shape[2] + crop_shape[2] // 2])
+                return grid, cents
 
-            montage1 = make_grid(crops1, nrows, ncols, target_shape)
-            montage2 = make_grid(crops2, nrows, ncols, target_shape)
-            # Optionally, stack them for display, or add separately:
-            self.viewer.add_image(montage1, name="Crop Montage 1", colormap='green')
-            self.viewer.add_image(montage2, name="Crop Montage 2", colormap='magenta', blending='additive')
+            montage1, cents = make_grid(crops1, nrows, ncols, target_shape)
+            montage2, _ = make_grid(crops2, nrows, ncols, target_shape)
+            ids = [ids[i] for i in sorted_indices]
+
+            self.viewer.add_image(montage1, name="Montage Layer 1", colormap='green')
+            self.viewer.add_image(montage2, name="Montage Layer 2", colormap='magenta', blending='additive')
+            self.viewer.camera.center = [i//2 for i in montage1.data.shape]
+            self.viewer.camera.angles = [0, 0, 90]
+
+            self.viewer.add_points(
+                cents,
+                features={'id': ids}, 
+                text={
+                    'string': '{id}', 
+                    'size': 10, 
+                    'translation': [0, target_shape[1]//2-1, 0], 
+                    'color':[1,1,1]}, 
+                face_color=[0,0,0,0], 
+                border_color=[0,0,0,0],
+                name='Montage labels'
+            )
             return  # prevent further code from running
         else:
             target_shape = (crop_size, crop_size)
