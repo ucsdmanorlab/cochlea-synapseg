@@ -39,8 +39,8 @@ def napari_get_reader(path):
             return amira_csv_reader_function
         elif path.endswith(".xls") or path.endswith(".XLS"):
             return amira_xls_reader_function
-        elif path.endswith(".zarr"):
-            return zarr_reader_function
+        # elif path.endswith(".zarr"):
+        #     return zarr_reader_function
     else:
         return None
 

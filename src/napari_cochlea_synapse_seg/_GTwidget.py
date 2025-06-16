@@ -457,7 +457,7 @@ class GTWidget(QWidget):
             return
         imgpath = img.source.path
 
-        if imgpath.endswith('.tif'):
+        if imgpath is not None and imgpath.endswith('.tif'):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
             self.xyres = x
             self.zres = z

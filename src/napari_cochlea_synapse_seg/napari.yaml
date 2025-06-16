@@ -18,16 +18,22 @@ contributions:
     - id: cochlea-synapseg.make_sample_data
       python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data
       title: Load sample data from Cochlea SynapSeg
-    - id: cochlea-synapseg.make_gtwidget
-      python_name: napari_cochlea_synapse_seg:GTWidget
-      title: Make GTWidget
+    - id: cochlea-synapseg.make_sample_data_with_noise
+      python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data_with_noise
+      title: Load sample data from Cochlea SynapSeg 2
+    - id: cochlea-synapseg.make_sample_data_pairs
+      python_name: napari_cochlea_synapse_seg._sample_data:make_sample_data_pairs
+      title: Load sample data from Cochlea SynapSeg 3
     - id: cochlea-synapseg.make_bigwidget
       python_name: napari_cochlea_synapse_seg:SynapSegWidget
       title: Make SynapSegWidget
+    - id: cochlea-synapseg.make_cropwidget
+      python_name: napari_cochlea_synapse_seg:CropWidget
+      title: Make CropWidget
   readers:
     - command: cochlea-synapseg.get_reader
-      accepts_directories: true
-      filename_patterns: ['*.zarr', '*.xml', '*.csv', '*.xls', '*.XLS']
+      accepts_directories: false
+      filename_patterns: ['*.xml', '*.csv', '*.xls', '*.XLS']
   writers:
     - command: cochlea-synapseg.write_multiple
       layer_types: ['image*','labels*']
@@ -36,12 +42,18 @@ contributions:
       layer_types: ['image']
       filename_extensions: ['.npy']
   sample_data:
-    - command: cochlea-synapseg.make_sample_data
-      display_name: Cochlea SynapSeg
+    - command: cochlea-synapseg.make_sample_data_with_noise
+      display_name: Simulated Synapses With Noise
       key: unique_id.1
+    - command: cochlea-synapseg.make_sample_data
+      display_name: Simulated Synapses
+      key: unique_id.2
+    - command: cochlea-synapseg.make_sample_data_pairs
+      display_name: Simulated Synapses Pairs
+      key: unique_id.3
   widgets:
-    - command: cochlea-synapseg.make_gtwidget
-      display_name: SynapSeg - Ground Truth Widget
     - command: cochlea-synapseg.make_bigwidget
       display_name: SynapSeg Widget
+    - command: cochlea-synapseg.make_cropwidget
+      display_name: Crop Widget
 
