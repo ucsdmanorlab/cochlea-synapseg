@@ -41,9 +41,6 @@ class GTWidget(QWidget):
         self.zres = 1
 
         self.active_image = QComboBox()
-        img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
-        #self.active_image.currentTextChanged.connect(lambda name: _update_attr(self, name, 'active_image'))
-        img_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
         _update_combos(self, self.active_image, 'Image', set_index=-1) 
         
         box2 = QGroupBox('Image tools')
@@ -52,7 +49,7 @@ class GTWidget(QWidget):
         zresbox  = QDoubleSpinBox()
         splitbtn = QPushButton('Split channels')
         splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
-        
+
         _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
         _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
@@ -61,7 +58,6 @@ class GTWidget(QWidget):
         
         image_gbox = QGridLayout()
         image_gbox.addWidget(QLabel('image layer:'), 0, 0) ; image_gbox.addWidget(self.active_image, 0, 1)
-        image_gbox.addWidget(img_refreshbtn, 0, 2)
         image_gbox.addWidget(QLabel('xy res:'), 1, 0) 
         image_gbox.addWidget(xyresbox, 1, 1)
         image_gbox.addWidget(QLabel('z res:'), 2, 0) 
@@ -72,12 +68,15 @@ class GTWidget(QWidget):
 
         self.layout().addWidget(box2)
 
+        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+
     def setup_points_box(self):
         # Point tools box ################################################################
         self.active_points = QComboBox()
-        pts_refreshbtn = QPushButton("\u27F3"); pts_refreshbtn.setToolTip("Refresh") 
-        pts_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_points, 'Points'))
         _update_combos(self, self.active_points, 'Points', set_index=-1)
+        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_points, 'Points'))
+        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_points, 'Points'))
 
         box3 = QGroupBox('Points tools')
         scalepts = QPushButton('real -> pixel units')
@@ -90,7 +89,6 @@ class GTWidget(QWidget):
 
         points_gbox = QGridLayout()
         points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(self.active_points, 0, 1)
-        points_gbox.addWidget(pts_refreshbtn, 0, 2)
         points_gbox.addWidget(scalepts, 1, 0, 1, 2)
         points_gbox.addWidget(chbox, 2, 0)
         points_gbox.addWidget(ch2zbtn, 2, 1)
@@ -195,15 +193,15 @@ class GTWidget(QWidget):
 
     def setup_labels_box(self):
         self.active_label = QComboBox()
-        lab_refreshbtn = QPushButton("\u27F3"); lab_refreshbtn.setToolTip("Refresh")
-        
+    
         # Label tools box ################################################################
         self.labcheck = QCheckBox("Make labels editable")
         self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
         self.labcheck.stateChanged.connect(self._set_editable)
         self.active_label.currentTextChanged.connect(self._set_editable)
-        lab_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
         _update_combos(self, self.active_label, 'Labels', set_index=-1)
+        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
+        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
 
         box4 = QGroupBox('Labels tools')
         self.labelbox = QSpinBox(); self.rem_label = 1
@@ -214,12 +212,13 @@ class GTWidget(QWidget):
         self.active_label.currentTextChanged.connect(self._set_max_label)
 
         self.active_merge_label = QComboBox(); 
-        lab2_refreshbtn = QPushButton("\u27F3"); lab2_refreshbtn.setToolTip("Refresh")
         mlsbtn = QPushButton("Merge labels")        
         l2pbtn = QPushButton("Labels to points")
         selectLabelsbtn = QPushButton("Keep labels from points")
+        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
+        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
 
-        lab2_refreshbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels'))
+
         mlsbtn.clicked.connect(self._merge_labels)
         mlsbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels', set_index=-1))
         mlsbtn.clicked.connect(self._set_max_label)
@@ -231,7 +230,6 @@ class GTWidget(QWidget):
 
         labels_gbox = QGridLayout()
         labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(self.active_label, 0, 1)
-        labels_gbox.addWidget(lab_refreshbtn, 0, 2)
         labels_gbox.addWidget(self.labcheck, 1, 0)
         labels_gbox.addWidget(self.labelbox, 2, 0)
         labels_gbox.addWidget(removebtn, 2, 1)
@@ -239,7 +237,6 @@ class GTWidget(QWidget):
         labels_gbox.addWidget(labn_refreshbtn, 3, 2)
         labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
         labels_gbox.addWidget(self.active_merge_label, 4, 1); 
-        labels_gbox.addWidget(lab2_refreshbtn, 5, 2)
         labels_gbox.addWidget(mlsbtn, 5, 0, 1, 2)
         labels_gbox.addWidget(l2pbtn, 6, 0, 1, 2)
         labels_gbox.addWidget(selectLabelsbtn, 7, 0, 1, 2)

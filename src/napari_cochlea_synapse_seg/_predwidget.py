@@ -80,8 +80,8 @@ class PredWidget(QWidget):
         self.size_filt = 0
 
         self.active_image = QComboBox()
-        img_refreshbtn = QPushButton("\u27F3"); img_refreshbtn.setToolTip("Refresh")
-        img_refreshbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
         _update_combos(self, self.active_image, 'Image', set_index=-1) 
         
         box2 = QGroupBox('Labels from prediction')
@@ -108,7 +108,6 @@ class PredWidget(QWidget):
 
         p2l_gbox = QGridLayout()
         p2l_gbox.addWidget(QLabel('pred layer:'), 0, 0) ; p2l_gbox.addWidget(self.active_image, 0, 1)
-        p2l_gbox.addWidget(img_refreshbtn, 0, 2)
         p2l_gbox.addWidget(QLabel('mask threshold:'), 1, 0) 
         p2l_gbox.addWidget(mask_thresh_box, 1, 1)
         p2l_gbox.addWidget(show_mask_btn, 1, 2)
