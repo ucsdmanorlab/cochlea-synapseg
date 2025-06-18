@@ -1,7 +1,10 @@
-from qtpy.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout
-import napari
+import os
+from qtpy.QtWidgets import QFileDialog, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
 import numpy as np
 from skimage.measure import regionprops
+from skimage.filters import threshold_otsu
+import os
+from tifffile import imwrite
 
 class CropWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -14,9 +17,9 @@ class CropWidget(QWidget):
         self.img1_combo = QComboBox()
         self.img2_combo = QComboBox()
         self.labels_combo = QComboBox()
-        layout.addWidget(QLabel("Image Layer 1:"))
+        layout.addWidget(QLabel("Presynaptic Image:"))
         layout.addWidget(self.img1_combo)
-        layout.addWidget(QLabel("Image Layer 2:"))
+        layout.addWidget(QLabel("Postsynaptic Image:"))
         layout.addWidget(self.img2_combo)
         layout.addWidget(QLabel("Labels Layer:"))
         layout.addWidget(self.labels_combo)
@@ -46,18 +49,30 @@ class CropWidget(QWidget):
         self.sort_combo.addItems(["Label ID", "Size", "X", "Y", "Z", "Layer 1 Intensity", "Layer 2 Intensity"])
         sort_layout.addWidget(self.sort_combo)
         layout.addLayout(sort_layout)
-
+        # add save checkbox:
+        self.save_check = QCheckBox("Save crops to disk")
+        self.save_check.setChecked(False)
+        layout.addWidget(self.save_check)
+        self.save_dir = os.path.expanduser("~")
+        
         self.crop_btn = QPushButton("Create Montage")
         layout.addWidget(self.crop_btn)
 
         # add zoom to label functionality:
+        zoom_box = QGroupBox('Zoom to label')
         self.label_id = QSpinBox()
         self.label_id.setMinimum(1)
         self.label_id.setMaximum(1000000)
         self.label_id.setValue(1)
-        layout.addWidget(self.label_id)
         self.zoom_to_label_btn = QPushButton("Zoom to Label")
-        layout.addWidget(self.zoom_to_label_btn)
+        
+        zoom_box_layout = QVBoxLayout()
+        zoom_box_layout.addWidget(QLabel("Label ID:"))
+        zoom_box_layout.addWidget(self.label_id)
+        zoom_box_layout.addWidget(self.zoom_to_label_btn)
+        zoom_box.setLayout(zoom_box_layout)
+        layout.addWidget(zoom_box)
+
 
 
         self.setLayout(layout)
@@ -109,10 +124,31 @@ class CropWidget(QWidget):
                     self.viewer.camera.zoom = 10
                     self.viewer.camera.center = (y, x)
                 break
+    
+    def get_save_directory(self):
+        if self.save_check.isChecked():
+            save_dir = QFileDialog.getExistingDirectory(
+                self, 
+                "Select Directory to Save Crops",
+                self.save_dir
+            )
+            if save_dir:
+                self.save_dir = save_dir
+            return save_dir if save_dir else None
+        return None
+
+    # ... (rest of your existing methods remain the same until create_montage)
 
     def create_montage(self):
+        # Get save directory if checkbox is checked
+        save_dir = self.get_save_directory()
+        if self.save_check.isChecked() and not save_dir:
+            return  # User cancelled directory selection
+        
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
         img2 = self.viewer.layers[self.img2_combo.currentText()].data
+        img2_mask = img2 > threshold_otsu(img2)
+
         labels = self.viewer.layers[self.labels_combo.currentText()].data
         crop_size = self.crop_size_spin.value()
         crop_size_z = self.crop_size_z_spin.value()
@@ -122,30 +158,34 @@ class CropWidget(QWidget):
         crops2 = []
         sortby = []
         ids = []
-
-        is_3d = labels.ndim == 3
+        post_syn = []
 
         for prop in props:
-            if is_3d:
-                z, y, x = np.round(prop.centroid).astype(int)
-                z0 = max(z - crop_size_z // 2, 0)
-                z1 = min(z + crop_size_z // 2, img1.shape[-3])
-                y0 = max(y - crop_size // 2, 0)
-                y1 = min(y + crop_size // 2, img1.shape[-2])
-                x0 = max(x - crop_size // 2, 0)
-                x1 = min(x + crop_size // 2, img1.shape[-1])
-                crop1 = img1[..., z0:z1, y0:y1, x0:x1]
-                crop2 = img2[..., z0:z1, y0:y1, x0:x1]
-            else:
-                y, x = np.round(prop.centroid).astype(int)
-                y0 = max(y - crop_size // 2, 0)
-                y1 = min(y + crop_size // 2, img1.shape[-2])
-                x0 = max(x - crop_size // 2, 0)
-                x1 = min(x + crop_size // 2, img1.shape[-1])
-                crop1 = img1[..., y0:y1, x0:x1]
-                crop2 = img2[..., y0:y1, x0:x1]
+            z, y, x = np.round(prop.centroid).astype(int)
+            z0 = max(z - crop_size_z // 2, 0)
+            z1 = min(z + crop_size_z // 2, img1.shape[-3])
+            y0 = max(y - crop_size // 2, 0)
+            y1 = min(y + crop_size // 2, img1.shape[-2])
+            x0 = max(x - crop_size // 2, 0)
+            x1 = min(x + crop_size // 2, img1.shape[-1])
+            crop1 = img1[..., z0:z1, y0:y1, x0:x1]
+            crop2 = img2[..., z0:z1, y0:y1, x0:x1]
+            
             crops1.append(crop1)
             crops2.append(crop2)
+
+            crop_mask = img2_mask[z0:z1, y0:y1, x0:x1]
+            # Check if the crop contains any post-synaptic signal
+            if np.any(crop_mask):
+                post_syn.append(True)
+            else:
+                post_syn.append(False)
+            # blobs = blob_dog(crop2, min_sigma=1, max_sigma=5, threshold=0.01)
+            # if blobs.size > 0:
+            #     post_syn.append(True)
+            # else:
+            #     post_syn.append(False)
+
             # sort by the selected property
             if self.sort_combo.currentText() == "Label ID":
                 sortby.append(prop.label)
@@ -154,10 +194,7 @@ class CropWidget(QWidget):
             elif self.sort_combo.currentText() == "Y":
                 sortby.append(y)
             elif self.sort_combo.currentText() == "Z": 
-                if is_3d:
-                    sortby.append(z)
-                else:
-                    sortby.append(0)
+                sortby.append(z)
             elif self.sort_combo.currentText() == "Size":
                 sortby.append(prop.area)
             elif self.sort_combo.currentText() == "Layer 1 Intensity":
@@ -171,85 +208,84 @@ class CropWidget(QWidget):
             return
 
         def pad_crop(crop, shape):
-            if is_3d:
-                pad_z = shape[0] - crop.shape[-3]
-                pad_y = shape[1] - crop.shape[-2]
-                pad_x = shape[2] - crop.shape[-1]
-                return np.pad(
-                    crop,
-                    ((pad_z//2, pad_z-pad_z//2),
-                        (pad_y//2, pad_y-pad_y//2),
-                        (pad_x//2, pad_x-pad_x//2)),
-                    mode='constant'
-                )
-            else:
-                pad_y = shape[0] - crop.shape[-2]
-                pad_x = shape[1] - crop.shape[-1]
-                return np.pad(
-                    crop,
-                    ((pad_y//2, pad_y-pad_y//2),
-                        (pad_x//2, pad_x-pad_x//2)),
-                    mode='constant'
-                )
-
-        if is_3d:
-            target_shape = (crop_size_z, crop_size, crop_size)
-            crops1 = [pad_crop(c, target_shape) for c in crops1]
-            crops2 = [pad_crop(c, target_shape) for c in crops2]
-            # Sort by area:
-            sorted_indices = np.argsort(sortby)
-            if self.sort_combo.currentText() in ["Size", "Layer 1 Intensity", "Layer 2 Intensity"]:
-                sorted_indices = sorted_indices[::-1]
-            crops1 = [crops1[i] for i in sorted_indices]
-            crops2 = [crops2[i] for i in sorted_indices]
-
-            nrows = int(np.ceil(np.sqrt(n)))
-            ncols = int(np.ceil(n / nrows))
-
-            def make_grid(crops, nrows, ncols, crop_shape):
-                grid = np.zeros(
-                    (crop_shape[0], nrows * crop_shape[1], ncols * crop_shape[2]),
-                    dtype=crops[0].dtype
-                )
-                cents = []
-                for idx, crop in enumerate(crops):
-                    row = idx // ncols
-                    col = idx % ncols
-                    grid[
-                        :,
-                        row * crop_shape[1]:(row + 1) * crop_shape[1],
-                        col * crop_shape[2]:(col + 1) * crop_shape[2]
-                    ] = crop
-                    cents.append([crop_shape[0]/2, row * crop_shape[1] + crop_shape[1] // 2, col * crop_shape[2] + crop_shape[2] // 2])
-                return grid, cents
-
-            montage1, cents = make_grid(crops1, nrows, ncols, target_shape)
-            montage2, _ = make_grid(crops2, nrows, ncols, target_shape)
-            ids = [ids[i] for i in sorted_indices]
-
-            self.viewer.add_image(montage1, name="Montage Layer 1", colormap='green')
-            self.viewer.add_image(montage2, name="Montage Layer 2", colormap='magenta', blending='additive')
-            self.viewer.camera.center = [i//2 for i in montage1.data.shape]
-            self.viewer.camera.angles = [0, 0, 90]
-
-            self.viewer.add_points(
-                cents,
-                features={'id': ids}, 
-                text={
-                    'string': '{id}', 
-                    'size': 10, 
-                    'translation': [0, target_shape[1]//2-1, 0], 
-                    'color':[1,1,1]}, 
-                face_color=[0,0,0,0], 
-                border_color=[0,0,0,0],
-                name='Montage labels'
+            pad_z = shape[0] - crop.shape[-3]
+            pad_y = shape[1] - crop.shape[-2]
+            pad_x = shape[2] - crop.shape[-1]
+            return np.pad(
+                crop,
+                ((pad_z//2, pad_z-pad_z//2),
+                    (pad_y//2, pad_y-pad_y//2),
+                    (pad_x//2, pad_x-pad_x//2)),
+                mode='constant'
             )
-            return  # prevent further code from running
-        else:
-            target_shape = (crop_size, crop_size)
-            crops1 = [pad_crop(c, target_shape) for c in crops1]
-            crops2 = [pad_crop(c, target_shape) for c in crops2]
             
-            montage = np.stack([np.concatenate([c1, c2], axis=-1) for c1, c2 in zip(crops1, crops2)])
+        
+        target_shape = (crop_size_z, crop_size, crop_size)
+        crops1 = [pad_crop(c, target_shape) for c in crops1]
+        crops2 = [pad_crop(c, target_shape) for c in crops2]
+        # Sort by area:
+        sorted_indices = np.argsort(sortby)
+        if self.sort_combo.currentText() in ["Size", "Layer 1 Intensity", "Layer 2 Intensity"]:
+            sorted_indices = sorted_indices[::-1]
+        crops1 = [crops1[i] for i in sorted_indices]
+        crops2 = [crops2[i] for i in sorted_indices]
+        ids = [ids[i] for i in sorted_indices]
+        post_syn = [post_syn[i] for i in sorted_indices]
+        
+        if self.save_check.isChecked():
+            for (id, post, c1, c2) in zip(ids, post_syn, crops1, crops2):
+                suff = '_pair' if post else '_orphan'
+                filename = os.path.join(self.save_dir, f"crop_{id}{suff}.tiff")
+                # Create metadata for ImageJ composite mode with green/magenta LUTs
+                metadata = {
+                    'axes': 'ZCYX',
+                    'mode': 'composite',
+                }
+                imwrite(filename, np.stack([c1, c2], axis=1), imagej=True, metadata=metadata)
 
-        self.viewer.add_image(montage, name="Crop Montage", colormap='gray')
+        nrows = int(np.ceil(np.sqrt(n)))
+        ncols = int(np.ceil(n / nrows))
+        
+        def make_grid(crops, nrows, ncols, crop_shape):
+            grid = np.zeros(
+                (crop_shape[0], nrows * crop_shape[1], ncols * crop_shape[2]),
+                dtype=crops[0].dtype
+            )
+            cents = []
+            for idx, crop in enumerate(crops):
+                row = idx // ncols
+                col = idx % ncols
+                grid[
+                    :,
+                    row * crop_shape[1]:(row + 1) * crop_shape[1],
+                    col * crop_shape[2]:(col + 1) * crop_shape[2]
+                ] = crop
+                cents.append([crop_shape[0]/2, row * crop_shape[1] + crop_shape[1] // 2, col * crop_shape[2] + crop_shape[2] // 2])
+            return grid, cents
+
+        montage1, cents = make_grid(crops1, nrows, ncols, target_shape)
+        montage2, _ = make_grid(crops2, nrows, ncols, target_shape)
+
+        self.viewer.add_image(montage1, name="Montage - Presyanptic", colormap='magenta')
+        self.viewer.add_image(montage2, name="Montage - Postsyanptic", colormap='green', blending='additive')
+        # set viewer to 3D mode:
+        self.viewer.dims.ndisplay = 3
+        self.viewer.camera.center = [i//2 for i in montage1.data.shape]
+        self.viewer.camera.angles = [0, 0, 90]
+        self.viewer.camera.zoom = 2
+        color_cycle = ['white', 'red'] if post_syn[0] else ['red', 'white']
+        self.viewer.add_points(
+            cents,
+            features={'id': ids, 
+                      'post_syn': post_syn}, 
+            text={
+                'string': '{id}', 
+                'size': 10, 
+                'translation': [0, target_shape[1]//2-1, 0], 
+                'color': {'feature': 'post_syn', 'colormap': color_cycle}, #[1,1,1]}, 
+            },
+            face_color=[0,0,0,0], 
+            border_color=[0,0,0,0],
+            name='Montage labels'
+        )
+    

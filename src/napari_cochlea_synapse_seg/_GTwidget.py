@@ -205,11 +205,12 @@ class GTWidget(QWidget):
 
         box4 = QGroupBox('Labels tools')
         self.labelbox = QSpinBox(); self.rem_label = 1
+        addbtn = QPushButton("New label")
+        addbtn.clicked.connect(self._add_label)
         removebtn = QPushButton("Remove label")
         self.maxlab = QLabel("max label: ")
-        labn_refreshbtn = QPushButton("\u27F3"); labn_refreshbtn.setToolTip("Refresh")
-        labn_refreshbtn.clicked.connect(self._set_max_label)
         self.active_label.currentTextChanged.connect(self._set_max_label)
+        self.active_label.currentTextChanged.connect(self._connect_label_events)
 
         self.active_merge_label = QComboBox(); 
         mlsbtn = QPushButton("Merge labels")        
@@ -230,11 +231,10 @@ class GTWidget(QWidget):
 
         labels_gbox = QGridLayout()
         labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(self.active_label, 0, 1)
-        labels_gbox.addWidget(self.labcheck, 1, 0)
+        labels_gbox.addWidget(self.labcheck, 1, 0); labels_gbox.addWidget(addbtn, 1, 1)
         labels_gbox.addWidget(self.labelbox, 2, 0)
         labels_gbox.addWidget(removebtn, 2, 1)
-        labels_gbox.addWidget(self.maxlab, 3, 0)
-        labels_gbox.addWidget(labn_refreshbtn, 3, 2)
+        #labels_gbox.addWidget(self.maxlab, 3, 0)
         labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
         labels_gbox.addWidget(self.active_merge_label, 4, 1); 
         labels_gbox.addWidget(mlsbtn, 5, 0, 1, 2)
@@ -248,6 +248,15 @@ class GTWidget(QWidget):
         
         self.layout().addWidget(box4)
         
+    def _add_label(self):
+        ''' set selected label to the next available number '''
+        lab = self.active_label.currentText()
+        if lab == '':
+            return
+        
+        n = self.viewer.layers[lab].data.max()
+        self.viewer.layers[lab].selected_label = (n + 1)
+
 
     def setup_save_box(self):
         box6 = QGroupBox('Save zarr')
@@ -530,6 +539,16 @@ class GTWidget(QWidget):
         
         self.viewer.layers[self.active_points.currentText()].refresh()
 
+    def _connect_label_events(self):
+        try:
+            layer_name = self.active_label.currentText()
+            if layer_name:
+                self.viewer.layers[layer_name].events.labels_update.connect(self._set_max_label)
+                self.viewer.layers[layer_name].events.selected_label.connect(self.labelbox.setValue)
+
+        except:
+            pass
+
     def _set_max_label(self):
         should_break=False
         try:
@@ -583,6 +602,7 @@ class GTWidget(QWidget):
         mask = labels.data == self.rem_label
         labels.data[mask] = 0
         labels.refresh()
+        self._set_max_label()
 
     def _merge_labels(self):
         should_break=False
@@ -598,6 +618,9 @@ class GTWidget(QWidget):
         except:
             print("Merge labels layer not defined.")
             should_break = True
+        if labels == labels2:
+            print("Cannot merge labels with itself.")
+            should_break = True
         if should_break:
             return
 
@@ -609,6 +632,7 @@ class GTWidget(QWidget):
             labels2.data[mask] = labels2.data[mask]+const
         labels.data[mask] = labels2.data[mask][:]
         labels.refresh()
+        self._set_max_label()
         self.viewer.layers.remove(self.active_merge_label.currentText())
         self.active_merge_label.setCurrentIndex(-1)
         try:

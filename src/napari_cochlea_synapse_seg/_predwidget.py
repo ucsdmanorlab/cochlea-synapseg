@@ -4,7 +4,6 @@ It includes various functionalities to display synapse images, edit and create p
 label annotations, interconvert between points and labels, and save data in as .zarr.
 """
 from typing import TYPE_CHECKING
-
 from qtpy.QtWidgets import QTabWidget, QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
@@ -12,7 +11,7 @@ from skimage.measure import label, regionprops_table
 from skimage.segmentation import watershed
 from skimage.util import map_array
 
-from ._reader import napari_get_reader
+#from ._reader import napari_get_reader
 from ._predict import predict
 import os
 import numpy as np
@@ -21,7 +20,9 @@ import tifffile
 
 if TYPE_CHECKING:
     import napari
-                
+
+# TODO (minor): use napari.utils.progress to show predict progress
+ 
 class PredWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
@@ -30,6 +31,7 @@ class PredWidget(QWidget):
 
     def init_ui(self):
         self.setLayout(QVBoxLayout())
+        
         self.setup_predict_box()
         self.setup_pred2label_box()
 
@@ -75,6 +77,7 @@ class PredWidget(QWidget):
     def setup_pred2label_box(self):
         self.mask_thresh = 0.0
         self.peak_thresh = 0.1
+        self.min_distance = 2
         self.sig_xy = 0.7
         self.sig_z = 0.5
         self.size_filt = 0
@@ -90,9 +93,16 @@ class PredWidget(QWidget):
         show_mask_btn = QPushButton('Show mask')
         peak_thresh_box  = QDoubleSpinBox()
         show_peaks_btn = QPushButton('Show peaks')
+
+        settings_btn = QPushButton('Advanced settings'); settings_btn.setCheckable(True)
+        settings_box = QGroupBox('Settings')
+        settings_box.setVisible(False)
+        settings_btn.toggled.connect(settings_box.setVisible)
+        
         sig_xy_box = QDoubleSpinBox()
         sig_z_box = QDoubleSpinBox()
         size_filt_box = QSpinBox()
+        min_dist_box = QSpinBox()
 
         pred2label_btn = QPushButton('Prediction to labels')
         
@@ -101,25 +111,37 @@ class PredWidget(QWidget):
         _setup_spin(self, sig_xy_box, minval=0, val=self.sig_xy, step=0.05, attrname='sig_xy', dec=2, dtype=float)
         _setup_spin(self, sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float)
         _setup_spin(self, size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int)
+        _setup_spin(self, min_dist_box, minval=0, maxval=1000, val=self.min_distance, step=1, attrname='min_distance', dtype=int)
 
         show_mask_btn.clicked.connect(lambda: self.viewer.add_image(self.viewer.layers[self.active_image.currentText()].data>self.mask_thresh, name='mask - '+str(self.mask_thresh)))
         show_peaks_btn.clicked.connect(lambda: self.viewer.add_points((self._get_peaks()), name='peaks - '+str(self.peak_thresh), size=5))
         pred2label_btn.clicked.connect(self._pred2labels); 
+        
+        settings_box.setLayout(QGridLayout())
+        settings_box.layout().addWidget(QLabel('sigma xy:'), 0, 0)
+        settings_box.layout().addWidget(sig_xy_box, 0, 1)
+        settings_box.layout().addWidget(QLabel('sigma z:'), 1, 0)
+        settings_box.layout().addWidget(sig_z_box, 1, 1)
+        settings_box.layout().addWidget(QLabel('size filter:'), 2, 0)
+        settings_box.layout().addWidget(size_filt_box, 2, 1)
+        settings_box.layout().addWidget(QLabel('min distance:'), 3, 0)
+        settings_box.layout().addWidget(min_dist_box, 3, 1)
 
         p2l_gbox = QGridLayout()
-        p2l_gbox.addWidget(QLabel('pred layer:'), 0, 0) ; p2l_gbox.addWidget(self.active_image, 0, 1)
+        p2l_gbox.addWidget(QLabel('pred layer:'), 0, 0) ; p2l_gbox.addWidget(self.active_image, 0,  1, 1, 2)
         p2l_gbox.addWidget(QLabel('mask threshold:'), 1, 0) 
         p2l_gbox.addWidget(mask_thresh_box, 1, 1)
         p2l_gbox.addWidget(show_mask_btn, 1, 2)
         p2l_gbox.addWidget(QLabel('peak threshold:'), 2, 0)
         p2l_gbox.addWidget(peak_thresh_box, 2, 1)
         p2l_gbox.addWidget(show_peaks_btn, 2, 2)
-        p2l_gbox.addWidget(QLabel('sigma xy:'), 3, 0)
-        p2l_gbox.addWidget(sig_xy_box, 3, 1)
-        p2l_gbox.addWidget(QLabel('sigma z:'), 4, 0)
-        p2l_gbox.addWidget(sig_z_box, 4, 1)
-        p2l_gbox.addWidget(QLabel('size filter:'), 5, 0)
-        p2l_gbox.addWidget(size_filt_box, 5, 1)
+        p2l_gbox.addWidget(settings_btn, 3, 0, 1, 3)
+        p2l_gbox.addWidget(settings_box, 4, 0, 1, 3) #QLabel('sigma xy:'), 3, 0)
+        # p2l_gbox.addWidget(sig_xy_box, 3, 1)
+        # p2l_gbox.addWidget(QLabel('sigma z:'), 4, 0)
+        # p2l_gbox.addWidget(sig_z_box, 4, 1)
+        # p2l_gbox.addWidget(QLabel('size filter:'), 5, 0)
+        # p2l_gbox.addWidget(size_filt_box, 5, 1)
         p2l_gbox.addWidget(pred2label_btn, 6, 0, 1, 2)
 
         box2.setLayout(p2l_gbox)
@@ -149,18 +171,7 @@ class PredWidget(QWidget):
         if model_file[0]:
             self.model_path_input.setText(model_file[0])
 
-    def _path_from_raw_source(self):
-        raw_path = self.viewer.layers[self.active_image.currentText()].source.path
-
-        if raw_path.rfind('.zarr')>0:
-            raw_path = raw_path[0:raw_path.rfind('.zarr')+5]
-        
-        directory, zarrfi = os.path.split(raw_path)
-
-        zarrfi = os.path.splitext(zarrfi)[0]+'.zarr'
-
-        self.file_path_input.setText(directory)
-        self.file_name_input.setText(zarrfi)
+    
         
     def _browse_for_path(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
@@ -193,41 +204,6 @@ class PredWidget(QWidget):
             #completer.setCaseSensitivity(Qt.CaseInsensitive)
             self.file_name_input.setCompleter(completer)
 
-    def _save_zarr(self, threeD=True, twoD=False):
-
-        fileName = os.path.join(self.file_path_input.text(), self.file_name_input.text())
-
-        # TODO: add dialog box to warn if overwriting a file
-        # TODO: ensure fileName ends with .zarr
-
-        zarrfi = zarr.open(fileName)
-
-        raw = self.viewer.layers[self.active_image.currentText()].data
-        labels = self.viewer.layers[self.active_label.currentText()].data
-
-        for (name, data) in (('raw', raw), ('labeled', labels)):
-            is_dask=True
-            try:
-                data.chunks
-            except:
-                is_dask=False
-
-            if threeD:
-                if is_dask:
-                    zarrfi[os.path.join('3d', f'{name}')] = data.compute()
-                else:
-                    zarrfi[os.path.join('3d', f'{name}')] = data
-                zarrfi[os.path.join('3d', f'{name}')].attrs['offset'] = [0,]*3
-                zarrfi[os.path.join('3d', f'{name}')].attrs['resolution'] = [1,]*3
-
-            if twoD:
-                for z in range(data.shape[0]):
-                    if is_dask:
-                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0).compute()
-                    else:
-                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0)
-                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['offset'] = [0,]*2
-                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
 
     def _convert_dask(self, layer_name):
         # check if is dask array
@@ -258,7 +234,7 @@ class PredWidget(QWidget):
                     dist_map,
                     footprint=np.ones((3, 3, 3)),
                     threshold_abs=self.peak_thresh,
-                    min_distance=2,
+                    min_distance=self.min_distance,
                     )
         print(coords.shape)
         return coords
@@ -281,7 +257,7 @@ class PredWidget(QWidget):
                     dist_map,
                     footprint=np.ones((3, 3, 3)),
                     threshold_abs=self.peak_thresh,
-                    min_distance=2,
+                    min_distance=self.min_distance,
                     )
         mask = np.zeros(dist_map.shape, dtype=bool)
         mask[tuple(coords.T)] = True
@@ -301,7 +277,7 @@ class PredWidget(QWidget):
             self.viewer.add_labels(segmentation_filt, name='labels from '+self.active_image.currentText()+', '+str(self.size_filt))
         else:
             self.viewer.add_labels(segmentation, name='labels from '+self.active_image.currentText())
-    
+
 def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
         if minval is not None:
             spinbox.setMinimum(minval)
@@ -320,7 +296,7 @@ def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=No
             setattr(curr_class, attrname, spinbox.value())
 
 def _update_attr(curr_class, value, attrname):
-        print('setting attribute', value, attrname)
+        #print('setting attribute', value, attrname)
         setattr(curr_class, attrname, value)
 
 def _update_combos(curr_class,
@@ -328,16 +304,21 @@ def _update_combos(curr_class,
         layer_type='Image',
         set_index=None):
 
-        rememberID = combobox.currentIndex()
-        combobox.clear(); count = -1
+        rememberID = combobox.currentText()
+        combobox.clear(); 
         combolist = []
         for item in curr_class.viewer.layers:
             if layer_type in str(type(item)):
                 combobox.addItem(item.name)
                 combolist.append(item.name)
-                count += 1
-
-        if set_index is not None and (set_index < count or abs(set_index) <= count):
-            combobox.setCurrentIndex(combolist.index(combolist[set_index])) #seems redundant but accomodates negative indices
-        elif rememberID>=0 and rememberID < count:
-            combobox.setCurrentIndex(rememberID)
+        count = len(combolist)
+        if count == 0:
+            return
+        if set_index is not None:
+            if set_index < 0:
+                idx = max(0, count + set_index) 
+            else:
+                idx = min(set_index, count - 1)
+            combobox.setCurrentIndex(idx) 
+        elif rememberID in combolist:
+            combobox.setCurrentText(rememberID)
