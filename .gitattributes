@@ -1,0 +1,1 @@
+src/napari_cochlea_synapse_seg/ctbp2_sdt_3d_model filter=lfs diff=lfs merge=lfs -text
