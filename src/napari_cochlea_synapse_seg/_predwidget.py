@@ -44,10 +44,14 @@ class PredWidget(QWidget):
         prednshow_btn = QPushButton('Predict and Show')
         prednshow_btn.clicked.connect(lambda: [self._predict(), self._show_pred()])
 
+        # Set default model path to ctbp2_sdt_3d_model in this package
+        default_model_path = os.path.join(os.path.dirname(__file__), "ctbp2_sdt_3d_model")
         browse_model_button = QPushButton("\uD83D\uDD0D"); browse_model_button.setToolTip("Find model file")
+        self.model_path_input = QLineEdit(self)
+        self.model_path_input.setText(default_model_path)
         browse_image_button = QPushButton("\uD83D\uDD0D"); browse_image_button.setToolTip("Find image .zarr file")
         
-        self.model_path_input = QLineEdit(self)
+        #self.model_path_input = QLineEdit(self)
         self.zarr_path_input = QLineEdit(self)
         browse_model_button.clicked.connect(self._browse_for_model)
         browse_image_button.clicked.connect(self._browse_for_zarr_input)
@@ -142,7 +146,7 @@ class PredWidget(QWidget):
         # p2l_gbox.addWidget(sig_z_box, 4, 1)
         # p2l_gbox.addWidget(QLabel('size filter:'), 5, 0)
         # p2l_gbox.addWidget(size_filt_box, 5, 1)
-        p2l_gbox.addWidget(pred2label_btn, 6, 0, 1, 2)
+        p2l_gbox.addWidget(pred2label_btn, 6, 0, 1, 3)
 
         box2.setLayout(p2l_gbox)
 
@@ -162,8 +166,8 @@ class PredWidget(QWidget):
     
     def _show_pred(self):
         zarrfi = zarr.open(self.zarr_path_input.text())
-        self.viewer.add_image(zarrfi['raw'], name='input')
-        self.viewer.add_image(zarrfi['pred'], name='prediction')
+        self.viewer.add_image(zarrfi['raw'], name='input', contrast_limits=[0, 65535])
+        self.viewer.add_image(zarrfi['pred'], name='prediction', contrast_limits=[0,1])
 
     def _browse_for_model(self):
         model_file = QFileDialog.getOpenFileName(self, "Select Model File")

@@ -1,5 +1,5 @@
 import os
-from qtpy.QtWidgets import QFileDialog, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
+from qtpy.QtWidgets import QFileDialog,QDoubleSpinBox, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
 import numpy as np
 from skimage.measure import regionprops
 from skimage.filters import threshold_otsu
@@ -10,6 +10,7 @@ class CropWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
+        self.montage_zoom = 2  # Default zoom level for montage
 
         layout = QVBoxLayout()
 
@@ -65,15 +66,29 @@ class CropWidget(QWidget):
         self.label_id.setMaximum(1000000)
         self.label_id.setValue(1)
         self.zoom_to_label_btn = QPushButton("Zoom to Label")
+        self.zoom_to_montage_btn = QPushButton("Zoom to Montage")
+        zoom_spin = QDoubleSpinBox()
+        zoom_spin.setMinimum(0)
+        zoom_spin.setMaximum(1000)
+        zoom_spin.setValue(self.montage_zoom)
+        zoom_spin.valueChanged[float].connect(lambda value: setattr(self, 'montage_zoom', value))
+        zoom_current = QPushButton("Current")
+        zoom_current.clicked.connect(lambda: zoom_spin.setValue(self.viewer.camera.zoom))
         
         zoom_box_layout = QVBoxLayout()
-        zoom_box_layout.addWidget(QLabel("Label ID:"))
-        zoom_box_layout.addWidget(self.label_id)
+        labels_layout = QHBoxLayout()
+        labels_layout.addWidget(QLabel("Label ID:"))
+        labels_layout.addWidget(self.label_id)
+        zoom_box_layout.addLayout(labels_layout)
         zoom_box_layout.addWidget(self.zoom_to_label_btn)
+        montage_zoom_layout = QHBoxLayout()
+        montage_zoom_layout.addWidget(QLabel("Montage Zoom:"))
+        montage_zoom_layout.addWidget(zoom_spin)
+        montage_zoom_layout.addWidget(zoom_current)
+        zoom_box_layout.addLayout(montage_zoom_layout)
+        zoom_box_layout.addWidget(self.zoom_to_montage_btn)
         zoom_box.setLayout(zoom_box_layout)
         layout.addWidget(zoom_box)
-
-
 
         self.setLayout(layout)
 
@@ -83,6 +98,7 @@ class CropWidget(QWidget):
 
         self.crop_btn.clicked.connect(self.create_montage)
         self.zoom_to_label_btn.clicked.connect(self.zoom_to_label)
+        self.zoom_to_montage_btn.clicked.connect(self.zoom_to_montage)
 
     def update_layer_choices(self, event=None):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
@@ -124,7 +140,31 @@ class CropWidget(QWidget):
                     self.viewer.camera.zoom = 10
                     self.viewer.camera.center = (y, x)
                 break
-    
+        # turn off montage layers:
+        for layer in self.viewer.layers:
+            if layer.name.startswith("Montage"):
+                layer.visible = False
+            if layer.name == self.labels_combo.currentText():
+                layer.visible = True
+            if layer.name == self.img1_combo.currentText():
+                layer.visible = True
+            if layer.name == self.img2_combo.currentText():
+                layer.visible = True
+    def zoom_to_montage(self):
+        layer_names = [layer.name for layer in self.viewer.layers]
+        montage_on = False
+        for name in layer_names[::-1]:
+            if name.startswith("Montage") and not montage_on:
+                self.viewer.layers[name].visible = True
+            else:
+                self.viewer.layers[name].visible = False
+            if name.startswith("Montage - Presynaptic") and not montage_on:
+                self.viewer.camera.zoom = self.montage_zoom
+                montage_layer = self.viewer.layers[name]
+                self.viewer.camera.center = [i // 2 for i in montage_layer.data.shape]
+                self.viewer.camera.angles = [0, 0, 90]
+                montage_on = True            
+        
     def get_save_directory(self):
         if self.save_check.isChecked():
             save_dir = QFileDialog.getExistingDirectory(
@@ -265,14 +305,26 @@ class CropWidget(QWidget):
 
         montage1, cents = make_grid(crops1, nrows, ncols, target_shape)
         montage2, _ = make_grid(crops2, nrows, ncols, target_shape)
-
-        self.viewer.add_image(montage1, name="Montage - Presyanptic", colormap='magenta')
-        self.viewer.add_image(montage2, name="Montage - Postsyanptic", colormap='green', blending='additive')
+        
+        for layer in self.viewer.layers:
+            if layer.name.startswith("Montage"):
+                self.viewer.layers.remove(layer)
+            else:
+                layer.visible = False
+        self.viewer.add_image(montage1, 
+                              name="Montage - Presynaptic", 
+                              colormap='magenta', 
+                              contrast_limits=self.viewer.layers[self.img1_combo.currentText()].contrast_limits)
+        self.viewer.add_image(montage2,
+                              name="Montage - Postsynaptic", 
+                              colormap='green', 
+                              blending='additive',
+                              contrast_limits=self.viewer.layers[self.img2_combo.currentText()].contrast_limits)
         # set viewer to 3D mode:
         self.viewer.dims.ndisplay = 3
         self.viewer.camera.center = [i//2 for i in montage1.data.shape]
         self.viewer.camera.angles = [0, 0, 90]
-        self.viewer.camera.zoom = 2
+        self.viewer.camera.zoom = self.montage_zoom
         color_cycle = ['white', 'red'] if post_syn[0] else ['red', 'white']
         self.viewer.add_points(
             cents,
@@ -286,6 +338,7 @@ class CropWidget(QWidget):
             },
             face_color=[0,0,0,0], 
             border_color=[0,0,0,0],
-            name='Montage labels'
+            name='Montage labels',
+            blending='additive',
         )
     

@@ -5,12 +5,13 @@ label annotations, interconvert between points and labels, and save data in as .
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QTabWidget, QScrollArea, QScrollBar, QVBoxLayout, QWidget
+from qtpy.QtWidgets import QTabWidget, QScrollArea, QScrollBar, QSizePolicy, QVBoxLayout, QWidget
 from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
 from napari.layers.utils.stack_utils import stack_to_images
+from qtpy.QtCore import Qt
 
 from ._GTwidget import GTWidget
 from ._predwidget import PredWidget
@@ -46,6 +47,8 @@ class SynapSegWidget(QWidget):
         scrollContent = QWidget(scrollarea)
         scrollLayout = QVBoxLayout(scrollContent)
         scrollContent.setLayout(scrollLayout)
+        widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        scrollLayout.setAlignment(Qt.AlignTop)
 
         scrollLayout.addWidget(widget)
         scrollarea.setWidget(scrollContent)
