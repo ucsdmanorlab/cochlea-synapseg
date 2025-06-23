@@ -120,6 +120,9 @@ class CropWidget(QWidget):
             self.img2_combo.setCurrentText(img2_choice)
         if labels_choice in label_layers:   
             self.labels_combo.setCurrentText(labels_choice)
+        for layer in self.viewer.layers:
+            layer.events.name.connect(self.update_layer_choices)
+
     def zoom_to_label(self):
         label_id = self.label_id.value()
         labels_layer = self.viewer.layers[self.labels_combo.currentText()]

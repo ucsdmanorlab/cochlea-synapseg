@@ -36,19 +36,23 @@ class GTWidget(QWidget):
         self.setup_labels_box()
         self.setup_save_box()
 
+        self.update_layer_choices()
+        self.viewer.layers.events.inserted.connect(self.update_layer_choices)
+        self.viewer.layers.events.removed.connect(self.update_layer_choices)
+
     def setup_image_box(self):
         self.xyres = 1
         self.zres = 1
 
         self.active_image = QComboBox()
-        _update_combos(self, self.active_image, 'Image', set_index=-1) 
+        # _update_combos(self, self.active_image, 'Image', set_index=-1) 
         
         box2 = QGroupBox('Image tools')
 
         xyresbox = QDoubleSpinBox()
         zresbox  = QDoubleSpinBox()
         splitbtn = QPushButton('Split channels')
-        splitbtn.clicked.connect(self._split_channels); splitbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        splitbtn.clicked.connect(self._split_channels); #splitbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
 
         _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
         _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
@@ -68,15 +72,15 @@ class GTWidget(QWidget):
 
         self.layout().addWidget(box2)
 
-        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
-        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        # self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        # self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
 
     def setup_points_box(self):
         # Point tools box ################################################################
         self.active_points = QComboBox()
-        _update_combos(self, self.active_points, 'Points', set_index=-1)
-        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_points, 'Points'))
-        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_points, 'Points'))
+        # _update_combos(self, self.active_points, 'Points', set_index=-1)
+        # self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_points, 'Points'))
+        # self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_points, 'Points'))
 
         box3 = QGroupBox('Points tools')
         scalepts = QPushButton('real -> pixel units')
@@ -147,20 +151,20 @@ class GTWidget(QWidget):
         wshedcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'wshed_type'))
 
         ptsbtn.clicked.connect(self._new_pts)
-        ptsbtn.clicked.connect(lambda: _update_combos(self, self.active_points,'Points', set_index=-1))
+        # ptsbtn.clicked.connect(lambda: _update_combos(self, self.active_points,'Points', set_index=-1))
         p2mbtn.clicked.connect(self._auto_z)
         rxybtn.clicked.connect(self._rxy)
         zbox.valueChanged[int].connect(self._change_z)
         zbox.valueChanged[int].connect(lambda: zbox.setValue(0))
         snapbtn.clicked.connect(self._snap_to_max)
         p2lbtn.clicked.connect(self._points2labels)
-        p2lbtn.clicked.connect(lambda: _update_combos(self,self.active_label, 'Labels'))
-        p2lbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels', set_index=-1))
+        # p2lbtn.clicked.connect(lambda: _update_combos(self,self.active_label, 'Labels'))
+        # p2lbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels', set_index=-1))
         
         box5b.setVisible(False)
         advbtn.toggled.connect(box5b.setVisible)
         
-        _update_combos(self, self.active_points, 'Points')
+        # _update_combos(self, self.active_points, 'Points')
 
         gbox5b = QGridLayout()
         gbox5b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox5b.addWidget(radxybox, 0, 1)
@@ -199,9 +203,9 @@ class GTWidget(QWidget):
         self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
         self.labcheck.stateChanged.connect(self._set_editable)
         self.active_label.currentTextChanged.connect(self._set_editable)
-        _update_combos(self, self.active_label, 'Labels', set_index=-1)
-        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
-        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
+        # _update_combos(self, self.active_label, 'Labels', set_index=-1)
+        # self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
+        # self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_label, 'Labels'))
 
         box4 = QGroupBox('Labels tools')
         self.labelbox = QSpinBox(); self.rem_label = 1
@@ -216,16 +220,16 @@ class GTWidget(QWidget):
         mlsbtn = QPushButton("Merge labels")        
         l2pbtn = QPushButton("Labels to points")
         selectLabelsbtn = QPushButton("Keep labels from points")
-        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
-        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
+        # self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
+        # self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_merge_label, 'Labels'))
 
 
         mlsbtn.clicked.connect(self._merge_labels)
-        mlsbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels', set_index=-1))
+        # mlsbtn.clicked.connect(lambda: _update_combos(self,self.active_merge_label, 'Labels', set_index=-1))
         mlsbtn.clicked.connect(self._set_max_label)
         removebtn.clicked.connect(self._remove_label)
         l2pbtn.clicked.connect(self._labels2points)
-        l2pbtn.clicked.connect(lambda: _update_combos(self, self.active_points, 'Points'))
+        # l2pbtn.clicked.connect(lambda: _update_combos(self, self.active_points, 'Points'))
         selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
         _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
 
@@ -243,11 +247,41 @@ class GTWidget(QWidget):
 
         box4.setLayout(labels_gbox)
 
-        _update_combos(self, self.active_label, 'Labels')
-        _update_combos(self, self.active_merge_label,'Labels')
+        # _update_combos(self, self.active_label, 'Labels')
+        # _update_combos(self, self.active_merge_label,'Labels')
         
         self.layout().addWidget(box4)
+
+    def update_layer_choices(self, event=None):
+        img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
+        label_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Labels"]
+        point_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Points"]
+
+        img_choice = self.active_image.currentText()
+        pts_choice = self.active_points.currentText()
+        label_choice = self.active_label.currentText()
+        merge_label_choice = self.active_merge_label.currentText()
         
+        for combo in (self.active_image, self.active_points, self.active_label, self.active_merge_label):
+            combo.clear()
+        
+        self.active_image.addItems(img_layers)
+        self.active_points.addItems(point_layers)
+        self.active_label.addItems(label_layers)
+        self.active_merge_label.addItems(label_layers)
+
+        if img_choice in img_layers:
+            self.active_image.setCurrentText(img_choice)
+        if pts_choice in point_layers:
+            self.active_points.setCurrentText(pts_choice)
+        if label_choice in label_layers:
+            self.active_label.setCurrentText(label_choice)
+        if merge_label_choice in label_layers:
+            self.active_merge_label.setCurrentText(merge_label_choice)
+
+        for layer in self.viewer.layers:
+            layer.events.name.connect(self.update_layer_choices)
+
     def _add_label(self):
         ''' set selected label to the next available number '''
         lab = self.active_label.currentText()
@@ -419,6 +453,8 @@ class GTWidget(QWidget):
                 out_of_slice_display=True,
                 opacity=0.7,
                 symbol='x')
+        # set active points layer to the new layer
+        self.active_points.setCurrentText(self.viewer.layers[-1].name)
         
     def _convert_ch2z(self):
         try:
@@ -771,6 +807,8 @@ class GTWidget(QWidget):
             print('invalid watershed type')
             return
         self.viewer.add_labels(outlabels, name='labels from '+self.active_points.currentText())
+        
+        self.active_merge_label.setCurrentText(self.viewer.layers[-1].name)
 
     def _snap_to_max(self):
         should_break=False
@@ -864,7 +902,7 @@ def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=No
             setattr(curr_class, attrname, spinbox.value())
 
 def _update_attr(curr_class, value, attrname):
-        print('setting attribute', value, attrname)
+        #print('setting attribute', value, attrname)
         setattr(curr_class, attrname, value)
 
 def _update_combos(curr_class,

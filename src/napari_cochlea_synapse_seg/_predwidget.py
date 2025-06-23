@@ -87,10 +87,13 @@ class PredWidget(QWidget):
         self.size_filt = 0
 
         self.active_image = QComboBox()
-        self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
-        self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
-        _update_combos(self, self.active_image, 'Image', set_index=-1) 
-        
+        # self.viewer.layers.events.inserted.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        # self.viewer.layers.events.removed.connect(lambda: _update_combos(self, self.active_image, 'Image'))
+        # _update_combos(self, self.active_image, 'Image', set_index=-1) 
+        self.update_layer_choices()
+        self.viewer.layers.events.inserted.connect(self.update_layer_choices)
+        self.viewer.layers.events.removed.connect(self.update_layer_choices)
+
         box2 = QGroupBox('Labels from prediction')
         
         mask_thresh_box = QDoubleSpinBox()
@@ -281,6 +284,19 @@ class PredWidget(QWidget):
             self.viewer.add_labels(segmentation_filt, name='labels from '+self.active_image.currentText()+', '+str(self.size_filt))
         else:
             self.viewer.add_labels(segmentation, name='labels from '+self.active_image.currentText())
+    def update_layer_choices(self, event=None):
+        img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
+
+        img_choice = self.active_image.currentText()
+        self.active_image.clear()
+
+        self.active_image.addItems(img_layers)
+        if img_choice in img_layers:
+            self.active_image.setCurrentText(img_choice)
+        elif img_choice == '' and len(img_layers) > 0:
+            self.active_image.setCurrentText(img_layers[-1]) # default to most recent layer
+        for layer in self.viewer.layers:
+            layer.events.name.connect(self.update_layer_choices)
 
 def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
         if minval is not None:
@@ -315,6 +331,7 @@ def _update_combos(curr_class,
             if layer_type in str(type(item)):
                 combobox.addItem(item.name)
                 combolist.append(item.name)
+                #item.events.name.connect(_update_combos(curr_class, combobox, layer_type=layer_type, set_index=set_index))
         count = len(combolist)
         if count == 0:
             return
@@ -326,3 +343,5 @@ def _update_combos(curr_class,
             combobox.setCurrentIndex(idx) 
         elif rememberID in combolist:
             combobox.setCurrentText(rememberID)
+
+    
