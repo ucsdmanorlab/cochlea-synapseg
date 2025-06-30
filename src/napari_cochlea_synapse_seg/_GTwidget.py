@@ -10,7 +10,9 @@ from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mas
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
+from skimage.filters import threshold_triangle
 from napari.layers.utils.stack_utils import stack_to_images
+
 
 from ._reader import napari_get_reader
 import os
@@ -59,7 +61,8 @@ class GTWidget(QWidget):
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
         self.active_image.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
         self.active_image.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
-        
+        self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(self.viewer.layers[self.active_image.currentText()].data.max()) if self.active_image.currentText() in self.viewer.layers else None)
+
         image_gbox = QGridLayout()
         image_gbox.addWidget(QLabel('image layer:'), 0, 0) ; image_gbox.addWidget(self.active_image, 0, 1)
         image_gbox.addWidget(QLabel('xy res:'), 1, 0) 
@@ -86,22 +89,36 @@ class GTWidget(QWidget):
         scalepts = QPushButton('real -> pixel units')
         chbox = QSpinBox(); self.nch=1;  
         ch2zbtn = QPushButton('chan -> z convert')
+        ptsbtn = QPushButton("New points layer")
+        pksbtn = QPushButton("Find peaks above:")
+        self.threshbox = QSpinBox(); self.thresh=10000
+        guessbtn = QPushButton("Guess")
         
         _setup_spin(self, chbox, minval=1, maxval=10, val=self.nch, attrname='nch')
+        _setup_spin(self, self.threshbox, minval=0, maxval=65535, val=self.thresh, attrname='thresh')
         ch2zbtn.clicked.connect(self._convert_ch2z)
         scalepts.clicked.connect(self._scale_points)
+        ptsbtn.clicked.connect(self._new_pts)
+        pksbtn.clicked.connect(self._find_peaks)
+        guessbtn.clicked.connect(self._calc_pk_thresh)
 
         points_gbox = QGridLayout()
         points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(self.active_points, 0, 1)
         points_gbox.addWidget(scalepts, 1, 0, 1, 2)
         points_gbox.addWidget(chbox, 2, 0)
         points_gbox.addWidget(ch2zbtn, 2, 1)
+        points_gbox.addWidget(ptsbtn, 3, 0, 1, 2)
+        pks_gbox = QHBoxLayout()
+        pks_gbox.addWidget(pksbtn)
+        pks_gbox.addWidget(self.threshbox)
+        pks_gbox.addWidget(guessbtn)
+        points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
+
         box3.setLayout(points_gbox)
 
         # Points2labels box ##############################################################
         box5 = QGroupBox('Points to labels')
 
-        ptsbtn = QPushButton("New points layer")
         rxybtn = QPushButton("Rotate to xy")
         p2mbtn = QPushButton("Auto-adjust z")
 
@@ -150,7 +167,6 @@ class GTWidget(QWidget):
         wshedcombo.addItem('Image'); wshedcombo.addItem('Distance')
         wshedcombo.currentTextChanged.connect(lambda name: _update_attr(self, name, 'wshed_type'))
 
-        ptsbtn.clicked.connect(self._new_pts)
         # ptsbtn.clicked.connect(lambda: _update_combos(self, self.active_points,'Points', set_index=-1))
         p2mbtn.clicked.connect(self._auto_z)
         rxybtn.clicked.connect(self._rxy)
@@ -443,7 +459,38 @@ class GTWidget(QWidget):
             except:
                 return
             self._convert_dask(self.active_label.currentText())
-
+    def _find_peaks(self):
+        try:
+            img = self.viewer.layers[self.active_image.currentText()].data
+        except:
+            print("Image layer not defined.")
+            return
+        
+        self._new_pts()
+        pts = self.viewer.layers[-1]
+        
+        img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
+        peaks = peak_local_max(img_filtered, threshold_abs=self.thresh)
+        if len(peaks) == 0:
+            print("No peaks found with the current threshold.")
+            return
+        
+        pts.data = np.array(peaks, dtype=np.float32)
+        pts.refresh()
+    
+    def _calc_pk_thresh(self):
+        try:
+            img = self.viewer.layers[self.active_image.currentText()].data
+        except:
+            print("Image layer not defined.")
+            return
+        img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
+        initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1)
+        peak_vals = img[tuple(initial_peaks.T)]
+        self.thresh = threshold_triangle(peak_vals)
+        self.threshbox.setValue(self.thresh)
+        self._find_peaks()
+    
     def _new_pts(self):
         self.viewer.add_points(
                 ndim=3, 
