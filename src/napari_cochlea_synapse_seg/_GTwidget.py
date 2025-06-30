@@ -45,6 +45,7 @@ class GTWidget(QWidget):
     def setup_image_box(self):
         self.xyres = 1
         self.zres = 1
+        self.img_shape = None
 
         self.active_image = QComboBox()
         # _update_combos(self, self.active_image, 'Image', set_index=-1) 
@@ -53,6 +54,7 @@ class GTWidget(QWidget):
 
         xyresbox = QDoubleSpinBox()
         zresbox  = QDoubleSpinBox()
+        self.split_choice = QComboBox()
         splitbtn = QPushButton('Split channels')
         splitbtn.clicked.connect(self._split_channels); #splitbtn.clicked.connect(lambda: _update_combos(self, self.active_image, 'Image'))
 
@@ -62,6 +64,7 @@ class GTWidget(QWidget):
         self.active_image.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
         self.active_image.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
         self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(self.viewer.layers[self.active_image.currentText()].data.max()) if self.active_image.currentText() in self.viewer.layers else None)
+        self.active_image.currentTextChanged.connect(self._update_split_choice)
 
         image_gbox = QGridLayout()
         image_gbox.addWidget(QLabel('image layer:'), 0, 0) ; image_gbox.addWidget(self.active_image, 0, 1)
@@ -69,7 +72,8 @@ class GTWidget(QWidget):
         image_gbox.addWidget(xyresbox, 1, 1)
         image_gbox.addWidget(QLabel('z res:'), 2, 0) 
         image_gbox.addWidget(zresbox, 2, 1)
-        image_gbox.addWidget(splitbtn, 3, 0, 1, 2)
+        image_gbox.addWidget(self.split_choice, 3, 0)
+        image_gbox.addWidget(splitbtn, 3, 1)
 
         box2.setLayout(image_gbox)
 
@@ -355,7 +359,18 @@ class GTWidget(QWidget):
 
         self.file_path_input.setText(directory)
         self.file_name_input.setText(zarrfi)
-        
+
+    def _update_split_choice(self):
+        dims = self.img_shape
+        if dims is not None:
+            self.split_choice.clear()
+            self.split_choice.addItem("None")
+            for i, d in enumerate(dims):
+                self.split_choice.addItem(f"Axis {i}: {d}")
+                if d == np.min(dims):
+                    default_choice = i+1
+            self.split_choice.setCurrentIndex(default_choice)
+
     def _browse_for_path(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
@@ -517,12 +532,17 @@ class GTWidget(QWidget):
         try:
             img = self.viewer.layers[self.active_image.currentText()]
         except:
-            print("Points layer not defined.")
+            print("Image layer not defined.")
             return
         
         ll = self.viewer.layers
         layer = img
-        images = stack_to_images(layer, axis=1)
+        if self.split_choice.currentText() == "None":
+            print("Choose channel dimension.")
+            return
+        else:
+            axis = int(self.split_choice.currentText().split(':')[0].split(' ')[-1])
+        images = stack_to_images(layer, axis=axis)
         ll.remove(layer)
         ll.extend(images)
         
@@ -550,6 +570,8 @@ class GTWidget(QWidget):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
             self.xyres = x
             self.zres = z
+
+        self.img_shape = img.data.shape
         # TODO: add functionality for .czi or other formats?
         
     def _read_tiff_voxel_size(self, file_path):
