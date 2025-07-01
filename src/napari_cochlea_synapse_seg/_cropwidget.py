@@ -1,16 +1,21 @@
 import os
-from qtpy.QtWidgets import QFileDialog,QDoubleSpinBox, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
+from qtpy.QtWidgets import QGridLayout, QFileDialog,QDoubleSpinBox, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
 import numpy as np
 from skimage.measure import regionprops
 from skimage.filters import threshold_otsu
 import os
 from tifffile import imwrite
+from skimage.restoration import rolling_ball
+from skimage.filters import threshold_yen, threshold_li, threshold_otsu
+from skimage.segmentation import watershed
+from scipy.ndimage import gaussian_filter
 
 class CropWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
         self.montage_zoom = 2  # Default zoom level for montage
+        self.post_syn_labels = None
 
         layout = QVBoxLayout()
 
@@ -22,8 +27,36 @@ class CropWidget(QWidget):
         layout.addWidget(self.img1_combo)
         layout.addWidget(QLabel("Postsynaptic Image:"))
         layout.addWidget(self.img2_combo)
-        layout.addWidget(QLabel("Labels Layer:"))
+        layout.addWidget(QLabel("Presynaptic labels Layer:"))
         layout.addWidget(self.labels_combo)
+        post_settings_btn = QPushButton("Post-synaptic detection options")
+        post_settings_btn.setCheckable(True)
+        layout.addWidget(post_settings_btn)        
+        #self.img2_combo.currentTextChanged.connect(lambda: setattr(self, 'post_syn_labels', None))
+
+        #############                
+        # Advanced settings
+
+        postSynBox = QGroupBox('Post-synaptic detection options')
+        self.bkradbox = QSpinBox(); 
+        self.bkradbox.setMinimum(1); self.bkradbox.setMaximum(20); self.bkradbox.setValue(5); self.bkradbox.setSuffix(' px')
+        self.sigxybox = QDoubleSpinBox(); self.sigxybox.setMinimum(0); self.sigxybox.setMaximum(10); self.sigxybox.setValue(2.0); self.sigxybox.setSuffix(' px'); self.sigxybox.setSingleStep(0.1)
+        self.sigzbox = QDoubleSpinBox(); self.sigzbox.setMinimum(0); self.sigzbox.setMaximum(10); self.sigzbox.setValue(1); self.sigzbox.setSuffix(' px'); self.sigzbox.setSingleStep(0.2)
+        self.threshbox = QComboBox(); self.threshbox.addItem('Yen'); self.threshbox.addItem('Otsu'); self.threshbox.addItem('Li'); self.threshbox.setCurrentText('Yen')
+        show_thresh = QPushButton('Show post-synaptic detection')
+        show_thresh.clicked.connect(self._show_post_syn_detection)
+
+        postSynBox.setVisible(False)
+        post_settings_btn.toggled.connect(postSynBox.setVisible)
+        
+        gbox_postsyn = QGridLayout()
+        gbox_postsyn.addWidget(QLabel('background rad:'), 0, 0); gbox_postsyn.addWidget(self.bkradbox, 0, 1)
+        gbox_postsyn.addWidget(QLabel('gaussian xy rad:'), 1, 0); gbox_postsyn.addWidget(self.sigxybox, 1, 1)
+        gbox_postsyn.addWidget(QLabel('gaussian z rad:'), 2, 0); gbox_postsyn.addWidget(self.sigzbox, 2, 1)
+        gbox_postsyn.addWidget(self.threshbox, 3, 0); gbox_postsyn.addWidget(show_thresh, 3, 1)
+        postSynBox.setLayout(gbox_postsyn)
+        layout.addWidget(postSynBox)
+        ##############
 
         # Crop size
         crop_layout = QHBoxLayout()
@@ -106,6 +139,9 @@ class CropWidget(QWidget):
 
         img1_choice = self.img1_combo.currentText()
         img2_choice = self.img2_combo.currentText()
+        if event and str(event.type) == 'removed' and str(event.value) == img2_choice:
+            print(f"Removed layer {img2_choice}, resetting post-synaptic labels")
+            setattr(self, 'post_syn_labels', None)
         labels_choice = self.labels_combo.currentText()
 
         self.img1_combo.clear()
@@ -122,6 +158,54 @@ class CropWidget(QWidget):
             self.labels_combo.setCurrentText(labels_choice)
         for layer in self.viewer.layers:
             layer.events.name.connect(self.update_layer_choices)
+    def _show_post_syn_detection(self):
+        labels = self._calc_post_syn_detection()
+        if labels is None:
+            return
+        self.viewer.add_labels(
+            labels, 
+            name='Post-synaptic detection', 
+        )
+    
+    def _calc_post_syn_detection(self):
+        if self.post_syn_labels is not None:
+            if self.bkradbox.value() == self.post_syn_labels['bk_rad'] and \
+               self.sigxybox.value() == self.post_syn_labels['sig_xy'] and \
+               self.sigzbox.value() == self.post_syn_labels['sig_z'] and \
+               self.threshbox.currentText() == self.post_syn_labels['thresh'] and \
+               self.img2_combo.currentText() == self.post_syn_labels['img']:
+                print("Using cached post-synaptic labels")
+                return self.post_syn_labels['labels']
+        try:
+            post_syn_layer = self.viewer.layers[self.img2_combo.currentText()]
+        except KeyError:
+            return
+        
+        bk = np.zeros_like(post_syn_layer.data)
+
+        for (i, zslice) in enumerate(post_syn_layer.data):
+            bk[i] = rolling_ball(zslice, radius=self.bkradbox.value())
+
+        bk_sub = post_syn_layer.data - bk
+
+        mask = gaussian_filter(bk_sub, sigma=(self.sigzbox.value()/2, self.sigxybox.value()/2, self.sigxybox.value()/2))
+        smoothed = gaussian_filter(bk_sub, sigma=(self.sigzbox.value(), self.sigxybox.value(), self.sigxybox.value()))
+        if self.threshbox.currentText() == 'Yen':
+            thresh = threshold_yen(mask)
+        elif self.threshbox.currentText() == 'Otsu':
+            thresh = threshold_otsu(mask)
+        elif self.threshbox.currentText() == 'Li':
+            thresh = threshold_li(mask)
+        mask = mask > thresh
+
+        labels = watershed(-smoothed, mask=mask)
+        self.post_syn_labels = {'bk_rad': self.bkradbox.value(),
+                                'sig_xy': self.sigxybox.value(),
+                                'sig_z': self.sigzbox.value(),
+                                'thresh': self.threshbox.currentText(),
+                                'img': self.img2_combo.currentText(),
+                                'labels': labels}
+        return labels
 
     def zoom_to_label(self):
         label_id = self.label_id.value()
@@ -190,7 +274,7 @@ class CropWidget(QWidget):
         
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
         img2 = self.viewer.layers[self.img2_combo.currentText()].data
-        img2_mask = img2 > threshold_otsu(img2)
+        img2_labels = self._calc_post_syn_detection()#img2 > threshold_otsu(img2)
 
         labels = self.viewer.layers[self.labels_combo.currentText()].data
         crop_size = self.crop_size_spin.value()
@@ -217,12 +301,14 @@ class CropWidget(QWidget):
             crops1.append(crop1)
             crops2.append(crop2)
 
-            crop_mask = img2_mask[z0:z1, y0:y1, x0:x1]
-            # Check if the crop contains any post-synaptic signal
-            if np.any(crop_mask):
-                post_syn.append(True)
-            else:
-                post_syn.append(False)
+            post_syn_strict = np.any(img2_labels[labels==prop.label])
+            # crop_mask = img2_labels[z0:z1, y0:y1, x0:x1]
+            # # Check if the crop contains any post-synaptic signal
+            # if np.any(crop_mask):
+            #     post_syn.append(True)
+            # else:
+            #     post_syn.append(False)
+            post_syn.append(post_syn_strict)
             # blobs = blob_dog(crop2, min_sigma=1, max_sigma=5, threshold=0.01)
             # if blobs.size > 0:
             #     post_syn.append(True)
