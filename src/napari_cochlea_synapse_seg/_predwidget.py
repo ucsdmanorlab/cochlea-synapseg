@@ -11,7 +11,7 @@ from skimage.measure import label, regionprops_table
 from skimage.segmentation import watershed
 from skimage.util import map_array
 
-#from ._reader import napari_get_reader
+from ._widget_utils import _setup_spin 
 from ._predict import predict
 import os
 import numpy as np
@@ -297,51 +297,3 @@ class PredWidget(QWidget):
             self.active_image.setCurrentText(img_layers[-1]) # default to most recent layer
         for layer in self.viewer.layers:
             layer.events.name.connect(self.update_layer_choices)
-
-def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
-        if minval is not None:
-            spinbox.setMinimum(minval)
-        if maxval is not None:
-            spinbox.setMaximum(maxval)
-        if suff is not None:
-            spinbox.setSuffix(suff)
-        if val is not None:
-            spinbox.setValue(val)
-        if step is not None:
-            spinbox.setSingleStep(step)
-        if dec is not None:
-            spinbox.setDecimals(dec)
-        if attrname is not None:
-            spinbox.valueChanged[dtype].connect(lambda value: _update_attr(curr_class, value, attrname))
-            setattr(curr_class, attrname, spinbox.value())
-
-def _update_attr(curr_class, value, attrname):
-        #print('setting attribute', value, attrname)
-        setattr(curr_class, attrname, value)
-
-def _update_combos(curr_class,
-        combobox,
-        layer_type='Image',
-        set_index=None):
-
-        rememberID = combobox.currentText()
-        combobox.clear(); 
-        combolist = []
-        for item in curr_class.viewer.layers:
-            if layer_type in str(type(item)):
-                combobox.addItem(item.name)
-                combolist.append(item.name)
-                #item.events.name.connect(_update_combos(curr_class, combobox, layer_type=layer_type, set_index=set_index))
-        count = len(combolist)
-        if count == 0:
-            return
-        if set_index is not None:
-            if set_index < 0:
-                idx = max(0, count + set_index) 
-            else:
-                idx = min(set_index, count - 1)
-            combobox.setCurrentIndex(idx) 
-        elif rememberID in combolist:
-            combobox.setCurrentText(rememberID)
-
-    

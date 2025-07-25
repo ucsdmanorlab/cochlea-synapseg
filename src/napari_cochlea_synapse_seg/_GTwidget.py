@@ -103,6 +103,7 @@ class GTWidget(QWidget):
         pks_gbox.addWidget(self.threshbox)
         pks_gbox.addWidget(guessbtn)
         points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
+        points_gbox.addWidget(ptsbtn, 5, 0, 1, 2)
 
         box3.setLayout(points_gbox)
 
@@ -181,7 +182,7 @@ class GTWidget(QWidget):
         box5b.setLayout(gbox5b)
 
         p2l_gbox = QGridLayout()
-        p2l_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
+        #p2l_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
         p2l_gbox.addWidget(rxybtn, 1, 0)
         p2l_gbox.addWidget(p2mbtn, 1, 1)
         p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
@@ -888,27 +889,6 @@ class GTWidget(QWidget):
             mask_out = mask
         
         return mask_out
-    
-# def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
-#         if minval is not None:
-#             spinbox.setMinimum(minval)
-#         if maxval is not None:
-#             spinbox.setMaximum(maxval)
-#         if suff is not None:
-#             spinbox.setSuffix(suff)
-#         if val is not None:
-#             spinbox.setValue(val)
-#         if step is not None:
-#             spinbox.setSingleStep(step)
-#         if dec is not None:
-#             spinbox.setDecimals(dec)
-#         if attrname is not None:
-#             spinbox.valueChanged[dtype].connect(lambda value: _update_attr(curr_class, value, attrname))
-#             setattr(curr_class, attrname, spinbox.value())
-
-# def _update_attr(curr_class, value, attrname):
-#         #print('setting attribute', value, attrname)
-#         setattr(curr_class, attrname, value)
 
 
 def normalize(data, maxval=1., dtype=np.uint16):

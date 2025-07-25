@@ -4,6 +4,7 @@ It includes various functionalities to display synapse images, edit and create p
 label annotations, interconvert between points and labels, and save data in as .zarr.
 """
 from typing import TYPE_CHECKING
+from ._widget_utils import _setup_spin, _limitStretch
 
 from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
 from napari.layers.utils.stack_utils import stack_to_images
@@ -34,6 +35,7 @@ class PreProcessWidget(QWidget):
         self.img_shape = None
 
         self.active_image = QComboBox()
+        _limitStretch(self.active_image)
         
         box2 = QGroupBox('Image tools')
 
@@ -170,60 +172,40 @@ class PreProcessWidget(QWidget):
             return
         imgpath = img.source.path
 
+        def _read_tiff_voxel_size(file_path):
+            """
+            Implemented based on information found in https://pypi.org/project/tifffile
+            """
+
+            def _xy_voxel_size(tags, key):
+                assert key in ['XResolution', 'YResolution']
+                if key in tags:
+                    num_pixels, units = tags[key].value
+                    return units / num_pixels
+                # return default
+                return 1.
+
+            with tifffile.TiffFile(file_path) as tiff:
+                image_metadata = tiff.imagej_metadata
+                if image_metadata is not None:
+                    z = image_metadata.get('spacing', 1.)
+                else:
+                    # default voxel size
+                    z = 1.
+
+                tags = tiff.pages[0].tags
+                # parse X, Y resolution
+                y = _xy_voxel_size(tags, 'YResolution')
+                x = _xy_voxel_size(tags, 'XResolution')
+                # return voxel size
+                return [z, y, x]
+            
         if imgpath is not None and imgpath.endswith('.tif'):
-            [z, y, x] = self._read_tiff_voxel_size(imgpath)
+            [z, y, x] = _read_tiff_voxel_size(imgpath)
             self.xyres = x
             self.zres = z
 
         self.img_shape = img.data.shape
         # TODO: add functionality for .czi or other formats?
         
-    def _read_tiff_voxel_size(self, file_path):
-        """
-        Implemented based on information found in https://pypi.org/project/tifffile
-        """
-
-        def _xy_voxel_size(tags, key):
-            assert key in ['XResolution', 'YResolution']
-            if key in tags:
-                num_pixels, units = tags[key].value
-                return units / num_pixels
-            # return default
-            return 1.
-
-        with tifffile.TiffFile(file_path) as tiff:
-            image_metadata = tiff.imagej_metadata
-            if image_metadata is not None:
-                z = image_metadata.get('spacing', 1.)
-            else:
-                # default voxel size
-                z = 1.
-
-            tags = tiff.pages[0].tags
-            # parse X, Y resolution
-            y = _xy_voxel_size(tags, 'YResolution')
-            x = _xy_voxel_size(tags, 'XResolution')
-            # return voxel size
-            return [z, y, x]
-def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
-        if minval is not None:
-            spinbox.setMinimum(minval)
-        if maxval is not None:
-            spinbox.setMaximum(maxval)
-        if suff is not None:
-            spinbox.setSuffix(suff)
-        if val is not None:
-            spinbox.setValue(val)
-        if step is not None:
-            spinbox.setSingleStep(step)
-        if dec is not None:
-            spinbox.setDecimals(dec)
-        if attrname is not None:
-            spinbox.valueChanged[dtype].connect(lambda value: _update_attr(curr_class, value, attrname))
-            setattr(curr_class, attrname, spinbox.value())
-
-def _update_attr(curr_class, value, attrname):
-        #print('setting attribute', value, attrname)
-        setattr(curr_class, attrname, value)
-
 
