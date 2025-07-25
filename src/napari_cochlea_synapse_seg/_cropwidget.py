@@ -140,7 +140,7 @@ class CropWidget(QWidget):
         img1_choice = self.img1_combo.currentText()
         img2_choice = self.img2_combo.currentText()
         if event and str(event.type) == 'removed' and str(event.value) == img2_choice:
-            print(f"Removed layer {img2_choice}, resetting post-synaptic labels")
+            #print(f"Removed layer {img2_choice}, resetting post-synaptic labels")
             setattr(self, 'post_syn_labels', None)
         labels_choice = self.labels_combo.currentText()
 
@@ -263,8 +263,6 @@ class CropWidget(QWidget):
                 self.save_dir = save_dir
             return save_dir if save_dir else None
         return None
-
-    # ... (rest of your existing methods remain the same until create_montage)
 
     def create_montage(self):
         # Get save directory if checkbox is checked

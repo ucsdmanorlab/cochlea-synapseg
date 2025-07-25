@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import zarr
 import xml.etree.ElementTree as et
+import os
 # from aicsimageio import AICSImage
 
 
@@ -39,7 +40,10 @@ def napari_get_reader(path):
             return amira_csv_reader_function
         elif path.endswith(".xls") or path.endswith(".XLS"):
             return amira_xls_reader_function
-        # elif path.endswith(".zarr"):
+        elif path.endswith(".zarr"):
+            if "raw" in zarr.open(path).keys() and "labeled" in zarr.open(path).keys():
+                return zarr_reader_function
+
         #     return zarr_reader_function
     else:
         return None
@@ -72,7 +76,7 @@ def amira_csv_reader_function(csvfile):
     
     zyxres = [1, 1, 1] #read_tiff_voxel_size(imfi)
 
-    xyz = np.genfromtxt(csvfi, delimiter=",", skip_header=1)[:,-3::]
+    xyz = np.genfromtxt(csvfile, delimiter=",", skip_header=1)[:,-3::]
     x = xyz[:,0]/zyxres[2]
     y = xyz[:,1]/zyxres[1]
     z = xyz[:,2]/zyxres[0]
@@ -119,7 +123,7 @@ def zarr_reader_function(path):
     label_kwargs = {}
 
     zarr_fi = zarr.open(path)
-    img = (zarr_fi['3d/raw'], img_kwargs, "image")
-    labels = (zarr_fi['3d/labeled'].astype(int)[:], label_kwargs, "labels")
+    img = (zarr_fi['raw'], img_kwargs, "image")
+    labels = (zarr_fi['labeled'].astype(int)[:], label_kwargs, "labels")
 
     return [img, labels]

@@ -5,21 +5,13 @@ label annotations, interconvert between points and labels, and save data in as .
 """
 from typing import TYPE_CHECKING
 
-from qtpy.QtWidgets import QTabWidget, QScrollArea, QScrollBar, QSizePolicy, QVBoxLayout, QWidget
-from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
-from skimage.feature import peak_local_max
-from skimage.measure import label, regionprops
-from skimage.segmentation import watershed
-from napari.layers.utils.stack_utils import stack_to_images
+from qtpy.QtWidgets import QTabWidget, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 from qtpy.QtCore import Qt
 
 from ._GTwidget import GTWidget
 from ._predwidget import PredWidget
-from ._reader import napari_get_reader
-import os
-import numpy as np
-import zarr
-import tifffile
+from ._preprocesswidget import PreProcessWidget
+
 
 if TYPE_CHECKING:
     import napari
@@ -32,9 +24,11 @@ class SynapSegWidget(QWidget):
     
     def init_ui(self):
         tab_widget = QTabWidget()
+        tab0 = self._init_scroll(PreProcessWidget(viewer=self.viewer))
         tab1 = self._init_scroll(GTWidget(viewer=self.viewer))
         tab2 = self._init_scroll(PredWidget(viewer=self.viewer))
         
+        tab_widget.addTab(tab0, "Preprocess")
         tab_widget.addTab(tab1, "Ground Truth")
         tab_widget.addTab(tab2, "Predict")
         self.setLayout(QVBoxLayout())
