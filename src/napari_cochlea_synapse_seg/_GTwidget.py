@@ -463,7 +463,7 @@ class GTWidget(QWidget):
         pts = self.viewer.layers[-1]
         
         img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
-        peaks = peak_local_max(img_filtered, threshold_abs=self.thresh)
+        peaks = peak_local_max(img_filtered, threshold_abs=self.thresh, min_distance=2)
         if len(peaks) == 0:
             print("No peaks found with the current threshold.")
             return
