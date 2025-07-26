@@ -3,6 +3,7 @@
 [![License BSD-3](https://img.shields.io/pypi/l/cochlea-synapseg.svg?color=green)](https://github.com/ucsdmanorlab/cochlea-synapseg/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/cochlea-synapseg.svg?color=green)](https://pypi.org/project/cochlea-synapseg)
 [![Python Version](https://img.shields.io/pypi/pyversions/cochlea-synapseg.svg?color=green)](https://python.org)
+[![DOI](https://zenodo.org/badge/865642960.svg)](https://doi.org/10.5281/zenodo.16433552)
 <!--
 [![tests](https://github.com/ucsdmanorlab/cochlea-synapseg/workflows/tests/badge.svg)](https://github.com/ucsdmanorlab/cochlea-synapseg/actions)
 [![codecov](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg/branch/main/graph/badge.svg)](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg)
