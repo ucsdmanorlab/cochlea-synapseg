@@ -113,7 +113,7 @@ Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#groun
 
 ![save_zarr](https://github.com/user-attachments/assets/1d824f49-012f-4fac-8fa1-64d7d319cd34)
 
-Functionality to save to .zarr format. Saves image as '3d/raw' and labels as '3d/labeled'. Used for later auto-segmentation of ribbons (not live in this plugin yet, but coming soon!). 
+Functionality to save to .zarr format. Saves presynapse image as 'raw', and labels as 'labeled' if they exist. Used for later prediction of ribbon segmentation.  
 
 \***21. File Path** - the directory in which to save the zarr; use the folder icon to search for an existing directory
 
@@ -121,9 +121,7 @@ Functionality to save to .zarr format. Saves image as '3d/raw' and labels as '3d
 
 **23. From Source** - set the file path and name to where the image layer was loaded from. (Caution: if you loaded a zarr, this will result in the zarr being overwritten!)
 
-\***24. Save 3D Only (recommended)** - saves the image and labels layers (selected in #1 and #15) in the specified .zarr, as 3d/raw and 3d/labeled, respectively. A reader is included with this plugin for this format as well. 
-
-**25. Save 2D and 3D** - (not recommended) to be used in the future if 2D models are to be run on the data, saves both the 3D stacks as in 24, and then individual 2D slices for each z in 2d/raw/[z] and 2d/labeled/[z]
+\***24. Save zarr** - saves the presynapse image layer (as selected above), and labels layers (as selected, if it exists) in the specified .zarr, as 'raw' and 'labeled', respectively. These can be drag + dropped into napari for viewing later, and can be fed directly into prediction. 
 
 Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Montage Widget](#montage-widget)
 
