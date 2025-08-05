@@ -82,3 +82,5 @@ venv/
 
 # written by setuptools_scm
 **/_version.py
+
+*ctbp2_sdt_3d_model

@@ -10,6 +10,8 @@ from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops_table
 from skimage.segmentation import watershed
 from skimage.util import map_array
+from napari.utils import progress
+from napari.utils.notifications import show_info
 
 from ._widget_utils import _setup_spin 
 from ._predict import predict
@@ -17,6 +19,7 @@ import os
 import numpy as np
 import zarr
 import tifffile
+import requests
 
 if TYPE_CHECKING:
     import napari
@@ -154,18 +157,57 @@ class PredWidget(QWidget):
         box2.setLayout(p2l_gbox)
 
         self.layout().addWidget(box2)
-    
-    def _predict(self):
-        pred = predict(
-            self.model_path_input.text(),
-            self.zarr_path_input.text(),
-            f'raw') 
+
+    def _download_model_with_napari_progress(self, url, dest, expected_bytes=None):
+        def get_remote_file_size(url):
+            response = requests.head(url, allow_redirects=True)
+            response.raise_for_status()
+            return int(response.headers.get("content-length", 0))
         
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        total = int(response.headers.get('content-length', 0))
+        
+        with open(dest, 'wb') as f, progress(total=total, desc="Downloading model") as pbar:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+
+        expected_bytes = get_remote_file_size(url) if expected_bytes is None else expected_bytes
+
+        if expected_bytes and os.path.getsize(dest) != expected_bytes:
+            os.remove(dest)
+            raise IOError("Downloaded model file is incomplete. Try again.")
+
+    def _predict(self):
+        if self.model_path_input.text() == '':
+            print("Model path is empty. Please select a model file.")
+            return
+        elif self.model_path_input.text().endswith('ctbp2_sdt_3d_model'):
+            if not os.path.exists(self.model_path_input.text()):
+                print("Downloading default model...")
+                URL = "https://github.com/ucsdmanorlab/cochlea-synapseg/releases/download/v0.1.1/ctbp2_sdt_3d_model"
+                self._download_model_with_napari_progress(URL, self.model_path_input.text(), expected_bytes=540535054)
+                # with requests.get(URL, stream=True) as r:
+                #     r.raise_for_status()
+                #     with open(self.model_path_input.text(), 'wb') as f:
+                #         for chunk in r.iter_content(chunk_size=8192):
+                #             f.write(chunk)
+
+        with progress(desc="Running prediction...(see terminal for progress)"):
+            pred = predict(
+                self.model_path_input.text(),
+                self.zarr_path_input.text(),
+                f'raw') 
+    
         zarrfi = zarr.open(self.zarr_path_input.text())
         
         zarrfi['pred'] = pred
         zarrfi['pred'].attrs['offset'] = [0,]*3
         zarrfi['pred'].attrs['resolution'] = [1,]*3
+
+        show_info("Prediction complete.")
     
     def _show_pred(self):
         zarrfi = zarr.open(self.zarr_path_input.text())

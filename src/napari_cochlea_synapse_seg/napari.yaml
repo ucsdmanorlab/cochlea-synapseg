@@ -55,5 +55,5 @@ contributions:
     - command: cochlea-synapseg.make_bigwidget
       display_name: SynapSeg Widget
     - command: cochlea-synapseg.make_cropwidget
-      display_name: Crop Widget
+      display_name: Montage Widget
 
