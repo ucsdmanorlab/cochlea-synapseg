@@ -13,14 +13,10 @@
 A napari plugin to segment cochlear ribbon synapses. 
 
 More is in the works, but currently includes:
-(1) pre-processing functions, 
-(2) tools to quickly generate ground truth ribbon segmentation, 
-(3) deep-learning based ribbon segmentation prediction, and 
-(4) tools to check for synapse pairs, and export montage images.
-
-----------------------------------
-
-This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
+1. pre-processing functions,
+2. tools to quickly generate ground truth ribbon segmentation,
+3. deep-learning based ribbon segmentation prediction, and
+4. tools to check for synapse pairs, and export montage images.
 
 <!--
 Don't miss the full getting started guide to set up your new package:
@@ -148,9 +144,31 @@ Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#groun
 
 ----------------------------------
 ### Montage Widget
+Used to generate montages of synapses and orphan ribbons (red), and tools to quickly navigate between montage view and the original image. 
+
 <img width="445" height="447" alt="montage-paired" src="https://github.com/user-attachments/assets/905d0a98-b9b0-4c00-9bcf-1eb947c1d4b4" />
 
-Used to generate montages of synapses and orphan ribbons (red), and tools to quickly navigate between montage view and the original image. Documentation coming soon. 
+<img width="423" height="385" alt="montage-menu1" src="https://github.com/user-attachments/assets/a9939aad-da60-4dad-9a3e-9262be47fe3c" />
+
+**\*1-3.** - Select the presynaptic and postsynaptic image layers, and the presynaptic labels layer loaded in the viewer
+
+**4.** Optional options to adjust where postsynaptic signal is detected. 
+
+**5.** Options for the montage display (size of crops, and sorting of crops)
+
+**6.** Option to save all crops (will save when create montage button is pressed)
+
+**\*7. Create montage** - show the montage in the viewer, and save crops if selected. 
+
+<img width="421" height="180" alt="montage-menu2" src="https://github.com/user-attachments/assets/ecd34cf9-6f26-4ba5-a959-23b52227db54" />
+
+**\*8. Zoom to label** - specify a label (numbers shown on montage), and move to the location of that label in the original image
+
+**9.** Option to manually (left) change the zoom level when "zoom to montage" is selected, or to set the zoom based on the current level (right)
+
+**\*10. Zoom to montage** - recenter the viewer at the montage; use to return to the montage viewer after "zoom to label" is used
+
+<img width="944" height="197" alt="montage_zoom2label" src="https://github.com/user-attachments/assets/0ad3e808-1c42-4e97-9100-254e7aa90d22" />
 
 <!-- 
 ## Contributing
@@ -183,3 +201,8 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [tox]: https://tox.readthedocs.io/en/latest/
 [pip]: https://pypi.org/project/pip/
 [PyPI]: https://pypi.org/
+
+----------------------------------
+
+This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
+
