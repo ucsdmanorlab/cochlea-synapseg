@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/cochlea-synapseg.svg?color=green)](https://pypi.org/project/cochlea-synapseg)
 [![Python Version](https://img.shields.io/pypi/pyversions/cochlea-synapseg.svg?color=green)](https://python.org)
 [![DOI](https://zenodo.org/badge/865642960.svg)](https://doi.org/10.5281/zenodo.16433552)
+[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/cochlea-synapseg)](https://napari-hub.org/plugins/cochlea-synapseg)
 <!--
 [![tests](https://github.com/ucsdmanorlab/cochlea-synapseg/workflows/tests/badge.svg)](https://github.com/ucsdmanorlab/cochlea-synapseg/actions)
 [![codecov](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg/branch/main/graph/badge.svg)](https://codecov.io/gh/ucsdmanorlab/cochlea-synapseg)
@@ -40,22 +41,27 @@ SynapSeg Widget includes all core functionalities. SynapSeg widget is divided in
 
 Montage Widget is under development and will later be rolled into the SynapSeg Widget. 
 
-Jump to: [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Montage Widget](#montage-widget)
+Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Analyze](#analyze-tab)
 
 ----------------------------------
 ### Preprocess Tab
-<img width="268" height="323" alt="preprocess" src="https://github.com/user-attachments/assets/2229158a-9650-49e0-86b4-2d3f53b656f2" />
+<img width="347" height="461" alt="preprocess tab screenshot" src="https://github.com/user-attachments/assets/a6a31d0c-be31-41cd-bd40-f67c643606f3" />
 
 #### Image tools
 * **image layer** - select an image layer (must already be loaded into napari) for preprocessing
 * **xy/z resolution** - (optional) in um/pixel, auto-loaded from .tifs when available in metadata
 * **split channels** - if your loaded image layer contains multiple channels, select the channel axis and click split channels. Channels must be separated for ribbon segmentation. (defaults to the smallest dimension)
+  
 #### Points tools
 * **points layer** - select a points layer (must already be loaded into napari) to use the preprocessing tools below:
 * **real -> pixel units** - if you've loaded points that were saved in real units, make sure the pixel size information above in image tools is correct, then click "real -> pixel units" to convert
 * **chan ->z convert** - some points (like ImageJ/FIJI rois or CellCounter points), show up in the wrong z plane because their "slice" coordinates are a combination of both slice and channel info. If this happens, set the number of channels (in the original image, where the ROIs were created!), and then click "chan -> z convert". Z coordinates of the points layer will be divided by the number of channels specified.
+* **snap to max** - snap all points in the selected points layer to the local max, within +- the selected number of pixels in x, y, and z
+  
+#### Labels tools
+* **labels layer** and **make labels editable** - if you loaded a labels layer from .zarr or certain other formats, it may be stored in a dask array and not editable in napari. You can check this box to load it into local memory, allowing editing
 
-Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Montage Widget](#montage-widget)
+Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Analyze](#analyze-tab)
 
 ----------------------------------
 ### Ground Truth Tab
@@ -68,25 +74,24 @@ Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#groun
 * **Scale z dimension** - check to scale all layers in the 3D viewer for isotropic viewing
 
 #### Points Tools & Points to Labels
-<img width="331" height="363" alt="GT_pts" src="https://github.com/user-attachments/assets/04bd8b38-64ed-4b91-a1b2-f002a7788d40" />
 
-**1. Points Layer Selection** - use the dropdown to select an existing points layer (or skip to #8 if not loading in existing points)
+!! DEC 2025 UPDATE: Big thanks to Brad Buran for his work making point annotations work in 3D! This widget has been updated with functions adapted from Brad's [Synaptogram plugin]. !!
+
+<img width="346" height="294" alt="points_tools" src="https://github.com/user-attachments/assets/dd73941a-d5d2-49b7-b5a1-a4e5ccb28227" />
+
+**1. Points Layer Selection** - use the dropdown to select an existing points layer (or skip to #5 if not loading in existing points)
 
 **2. Find peaks above** - use an automatic peak finder to find peaks above a certain value. Useful as a starting point for manual annotation. 
 
 **3. Guess** - use the image intensity information to guess an appropriate peak value for #2
 
-\***4. New Points Layer** - if starting annotation from scratch, click to create a new points layer
+\***4. New Points Layer** - if starting annotation from scratch, click to create a new points layer. You can then add points in 3D by selecting the pan/zoom tool, and right-clicking (or ctrl+clicking) to add points. 
 
-\***5. Rotate to XY and \*6. Auto-adjust Z** - these convenient functions allow you to quickly annotate points in Napari's 3D view. Click "Rotate to XY" before adding new points. These points will now have the correct XY position but will have missing Z information. (Rotate out of XY to confirm.) Click "Auto-adjust z" and the z will automatically adjust to the brightest point. 
+\***5. Snap to max** - when you drop points, allow the point to "snap" to the local maximum, with a range specified by the number to the right. 
 
-**7. Manually Edit Z** - useful for overlapping points, can be used to manually edit the z position of ONLY selected points. Use the +/- arrow keys for single z steps type in a number to move a larger amount. 
+\***6. Points to Labels** - the key functionality of the module, creates a label layer by performing a local segmentation on all points.
 
-**8. Snap too Max** - will automatically adjust all points to their local max (search radius defined in pixels in Advanced Settings -> snap to max rad). Useful for adjusting quickly dropped points, but proceed with caution if you have close-together points. 
-
-\***9. Points to Labels** - the key functionality of the module, creates a label layer by performing a local segmentation on all points.
-
-**10. Advanced Settings** - adjust settings for the points to labels function to optimize local segmentation and watershed separation of points. 
+**7. Advanced Settings** - adjust settings for the points to labels function to optimize local segmentation and watershed separation of points. 
 
 ### Labels Tools
 <img width="332" height="291" alt="GT_labels" src="https://github.com/user-attachments/assets/e6dadc17-9df4-4f45-913a-44ed348b09d2" />
@@ -119,7 +124,7 @@ Functionality to save to .zarr format. Saves presynapse image as 'raw', and labe
 
 \***24. Save zarr** - saves the presynapse image layer (as selected above), and labels layers (as selected, if it exists) in the specified .zarr, as 'raw' and 'labeled', respectively. These can be drag + dropped into napari for viewing later, and can be fed directly into prediction. 
 
-Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Montage Widget](#montage-widget)
+Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Analyze](#analyze-tab)
 
 ----------------------------------
 ### Predict Tab
@@ -140,10 +145,10 @@ Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#groun
 * **peak threshold** - the threshold used to determine whether nearby objects will be split, and whether objects without a bright center will be retained. For most images, 0.1-0.4 works well.
 * **Prediction to labels** - generate labels using the settings selected above
 
-Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Montage Widget](#montage-widget)
+Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Analyze](#analyze-tab)
 
 ----------------------------------
-### Montage Widget
+### Analyze Tab
 Used to generate montages of synapses and orphan ribbons (red), and tools to quickly navigate between montage view and the original image. 
 
 <img width="445" height="447" alt="montage-paired" src="https://github.com/user-attachments/assets/905d0a98-b9b0-4c00-9bcf-1eb947c1d4b4" />
@@ -196,6 +201,7 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
 [cookiecutter-napari-plugin]: https://github.com/napari/cookiecutter-napari-plugin
 [file an issue]: https://github.com/ucsdmanorlab/cochlea-synapseg/issues/new
+[Synaptogram plugin]: https://github.com/bburan/napari-synaptogram
 
 [napari]: https://github.com/napari/napari
 [tox]: https://tox.readthedocs.io/en/latest/
