@@ -27,12 +27,6 @@ contributions:
     - id: cochlea-synapseg.make_bigwidget
       python_name: napari_cochlea_synapse_seg:SynapSegWidget
       title: Make SynapSegWidget
-    - id: cochlea-synapseg.make_cropwidget
-      python_name: napari_cochlea_synapse_seg:CropWidget
-      title: Make CropWidget
-    - id: cochlea-synapseg.make_ctbp2detection
-      python_name: napari_cochlea_synapse_seg:CtBP2Detection
-      title: Make CtBP2Detection Widget
   readers:
     - command: cochlea-synapseg.get_reader
       accepts_directories: false
@@ -57,8 +51,3 @@ contributions:
   widgets:
     - command: cochlea-synapseg.make_bigwidget
       display_name: SynapSeg Widget
-    - command: cochlea-synapseg.make_cropwidget
-      display_name: Montage Widget
-    - command: cochlea-synapseg.make_ctbp2detection
-      display_name: CtBP2 Detection Widget
-

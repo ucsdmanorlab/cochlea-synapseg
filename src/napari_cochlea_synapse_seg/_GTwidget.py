@@ -64,7 +64,8 @@ class GTWidget(QWidget):
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
         self.active_image.currentTextChanged.connect(lambda: self.xyresbox.setValue(self.xyres))
         self.active_image.currentTextChanged.connect(lambda: self.zresbox.setValue(self.zres))
-        self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(self.viewer.layers[self.active_image.currentText()].data.max()) if self.active_image.currentText() in self.viewer.layers else None)
+        self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(
+            int(self.viewer.layers[self.active_image.currentText()].data.max())) if self.active_image.currentText() in self.viewer.layers else None)
         self.z_scale.stateChanged.connect(self._set_z_scale)
 
         image_gbox = QVBoxLayout()
@@ -309,23 +310,17 @@ class GTWidget(QWidget):
                 self._add_point(layer, event)
 
     def _remove_point(self, layer, event):
-        try:
-            position = layer.world_to_data(event.position)
-            
-            if len(layer.data) == 0:
-                return
-                
-            distances = np.linalg.norm(layer.data - position, axis=1)
-            closest_idx = np.argmin(distances)
-            closest_distance = distances[closest_idx]
-            
-            new_data = np.delete(layer.data, closest_idx, axis=0)
-            layer.data = new_data
-                
-        except Exception as e:
-            print(f"Error removing point: {e}")
-            import traceback
-            traceback.print_exc()
+        # This seems to handle hit testing. Not thrilled about using an
+        # internal API, but it's styled after
+        # napari.layers.points._points_mouse_bindings.
+        point_index = layer._get_value_(
+            position=event.position,
+            view_direction=event.view_direction,
+            dims_displayed=event.dims_displayed,
+            world=True,
+        )
+        if point_index is not None:
+            layer.pop(point_index)
 
     def _add_point(self, layer, event):
         image_layer = self.active_image.currentText()

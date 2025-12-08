@@ -4,8 +4,6 @@ from ._reader import napari_get_reader
 from ._sample_data import make_sample_data, make_sample_data_with_noise, make_sample_data_pairs
 from ._widget import SynapSegWidget
 #from ._writer import write_multiple, write_single_image
-from ._cropwidget import CropWidget
-from .brad_ctbp2 import CtBP2Detection
 
 __all__ = (
     "napari_get_reader",
@@ -15,6 +13,4 @@ __all__ = (
     "make_sample_data_with_noise",
     "make_sample_data_pairs",
     "SynapSegWidget",
-    "CropWidget",
-    "CtBP2Detection",
 )
