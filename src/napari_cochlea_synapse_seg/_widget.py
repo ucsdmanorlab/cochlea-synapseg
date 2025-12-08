@@ -11,6 +11,7 @@ from qtpy.QtCore import Qt
 from ._GTwidget import GTWidget
 from ._predwidget import PredWidget
 from ._preprocesswidget import PreProcessWidget
+from ._cropwidget import CropWidget
 
 
 if TYPE_CHECKING:
@@ -27,10 +28,12 @@ class SynapSegWidget(QWidget):
         tab0 = self._init_scroll(PreProcessWidget(viewer=self.viewer))
         tab1 = self._init_scroll(GTWidget(viewer=self.viewer))
         tab2 = self._init_scroll(PredWidget(viewer=self.viewer))
+        tab3 = self._init_scroll(CropWidget(viewer=self.viewer))
         
         tab_widget.addTab(tab0, "Preprocess")
         tab_widget.addTab(tab1, "Ground Truth")
         tab_widget.addTab(tab2, "Predict")
+        tab_widget.addTab(tab3, "Analyze")
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(tab_widget)
 

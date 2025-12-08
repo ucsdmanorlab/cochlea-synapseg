@@ -6,7 +6,7 @@ label annotations, interconvert between points and labels, and save data in as .
 from typing import TYPE_CHECKING
 from ._widget_utils import _setup_spin, _limitStretch
 
-from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
+from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
 from napari.layers.utils.stack_utils import stack_to_images
 import numpy as np
 import tifffile
@@ -24,6 +24,7 @@ class PreProcessWidget(QWidget):
         self.setLayout(QVBoxLayout())
         self.setup_image_box()
         self.setup_points_box()
+        self.setup_labels_box()
 
         self.update_layer_choices()
         self.viewer.layers.events.inserted.connect(self.update_layer_choices)
@@ -73,19 +74,42 @@ class PreProcessWidget(QWidget):
         scalepts = QPushButton('real -> pixel units')
         chbox = QSpinBox(); self.nch=1;  
         ch2zbtn = QPushButton('chan -> z convert')
+        snapbtn = QPushButton("Snap to max")
+        snapbox = QSpinBox(); self.snap_rad = 3
+        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')        
         
         _setup_spin(self, chbox, minval=1, maxval=10, val=self.nch, attrname='nch')
         ch2zbtn.clicked.connect(self._convert_ch2z)
         scalepts.clicked.connect(self._scale_points)
+        snapbtn.clicked.connect(self._snap_to_max)
         
         points_gbox = QGridLayout()
         points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(self.active_points, 0, 1)
         points_gbox.addWidget(scalepts, 1, 0, 1, 2)
         points_gbox.addWidget(chbox, 2, 0)
         points_gbox.addWidget(ch2zbtn, 2, 1)
+        points_gbox.addWidget(snapbox, 3, 0)
+        points_gbox.addWidget(snapbtn, 3, 1)
         box3.setLayout(points_gbox)
 
         self.layout().addWidget(box3)
+    
+    def setup_labels_box(self):
+        # Labels tools box ################################################################
+        box4 = QGroupBox('Labels tools')
+        self.active_label = QComboBox()
+
+        self.labcheck = QCheckBox("Make labels editable")
+        self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
+        self.labcheck.stateChanged.connect(self._set_editable)
+        self.active_label.currentTextChanged.connect(self._set_editable)
+
+        labels_gbox = QGridLayout()
+        labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(self.active_label, 0, 1)
+        labels_gbox.addWidget(self.labcheck, 1, 0, 1, 2); 
+
+        box4.setLayout(labels_gbox)        
+        self.layout().addWidget(box4)
 
     def update_layer_choices(self, event=None):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
@@ -207,5 +231,58 @@ class PreProcessWidget(QWidget):
 
         self.img_shape = img.data.shape
         # TODO: add functionality for .czi or other formats?
+    
+    def _snap_to_max(self):
+        should_break=False
+        try:
+            pts = self.viewer.layers[self.active_points.currentText()].data
+        except:
+            print("Points layer not defined.")
+            should_break=True
+        try:
+            img = self.viewer.layers[self.active_image.currentText()].data
+        except:
+            print("Image layer not defined.")
+            should_break=True
+        if self.snap_rad<=0:
+            print("Snap radius must be >0.")
+            should_break=True
+        if should_break:
+            print("Snap to max could not complete. Make sure correct image and points layers are selected.")
+            return
+        
+        #blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
+        #img_inv = gaussian_filter(np.min(img) + np.max(img) - img, blur_sig)
+        count = 0
+
+        for pos in pts:
+            pos = np.round(pos).astype('int')
+            zrange, yrange, xrange, rel_pos = self._get_slices(self.snap_rad, self.snap_rad, pos, img.shape)
+            pointIntensity = img[zrange, yrange, xrange]
+
+            shift = np.unravel_index(np.argmax(pointIntensity), pointIntensity.shape)
+            shift = np.asarray(shift)-self.snap_rad
+
+            pos = (pos + shift).astype('int')
+            pts[count] = pos
+            count += 1
+        self.viewer.layers[self.active_points.currentText()].refresh()
+
+    def _convert_dask(self, layer_name):
+        try:
+            self.viewer.layers[layer_name].data.chunks
+        except:
+            # not a dask
+            return
+        print('converting layer '+layer_name+' to numpy array')
+        self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
+
+    def _set_editable(self):
+        if self.labcheck.isChecked():
+            try:
+                label = self.active_label.currentText()
+            except:
+                return
+            self._convert_dask(self.active_label.currentText())
         
 

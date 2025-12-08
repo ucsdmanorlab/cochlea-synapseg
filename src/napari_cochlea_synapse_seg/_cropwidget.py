@@ -11,13 +11,18 @@ from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
 
 class CropWidget(QWidget):
-    def __init__(self, napari_viewer):
+    def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
-        self.viewer = napari_viewer
+        self.viewer = viewer
         self.montage_zoom = 2  # Default zoom level for montage
         self.post_syn_labels = None
 
         layout = QVBoxLayout()
+
+        #
+        renumber_btn = QPushButton("Renumber labels")
+        renumber_btn.clicked.connect(self._renumber_labels)
+        layout.addWidget(renumber_btn)
 
         # Layer selectors
         self.img1_combo = QComboBox()
@@ -80,7 +85,7 @@ class CropWidget(QWidget):
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(QLabel("Sort by:"))
         self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["Label ID", "Size", "X", "Y", "Z", "Layer 1 Intensity", "Layer 2 Intensity"])
+        self.sort_combo.addItems(["Label ID", "Size", "X", "Y", "Z", "Presynaptic Intensity", "Postsynaptic Intensity"])
         sort_layout.addWidget(self.sort_combo)
         layout.addLayout(sort_layout)
         # add save checkbox:
@@ -158,6 +163,17 @@ class CropWidget(QWidget):
             self.labels_combo.setCurrentText(labels_choice)
         for layer in self.viewer.layers:
             layer.events.name.connect(self.update_layer_choices)
+
+    def _renumber_labels(self):
+        labels_layer = self.viewer.layers[self.labels_combo.currentText()]
+        labels_data = labels_layer.data
+        props = regionprops(labels_data)
+        new_labels = np.zeros_like(labels_data)
+        for new_label, prop in enumerate(props, start=1):
+            new_labels[labels_data == prop.label] = new_label
+        labels_layer.data = new_labels
+        self.post_syn_labels = None
+
     def _show_post_syn_detection(self):
         labels = self._calc_post_syn_detection()
         if labels is None:

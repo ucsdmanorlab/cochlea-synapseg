@@ -6,7 +6,7 @@ label annotations, interconvert between points and labels, and save data in as .
 from typing import TYPE_CHECKING
 
 from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
-from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
+from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass, map_coordinates
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
@@ -42,6 +42,8 @@ class GTWidget(QWidget):
         self.update_layer_choices()
         self.viewer.layers.events.inserted.connect(self.update_layer_choices)
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
+        # self.viewer.layers.events.inserted.connect(self._rescan_layers, position="last")
+        # self.viewer.layers.events.removed.connect(self._rescan_layers, position="last")
 
     def setup_image_box(self):
         self.xyres = 1
@@ -84,13 +86,22 @@ class GTWidget(QWidget):
     def setup_points_box(self):
         # Point tools box ################################################################
         self.active_points = QComboBox()
+        self.active_points.currentTextChanged.connect(self._connect_point_events)
         
         box3 = QGroupBox('Points tools')
         ptsbtn = QPushButton("New points layer")
         pksbtn = QPushButton("Find peaks above:")
         self.threshbox = QSpinBox(); self.thresh=10000
         guessbtn = QPushButton("Guess")
+
+        snap_check = QCheckBox("Snap to max"); self.snap_to_max = True; snap_check.setChecked(self.snap_to_max)
+        snapbox = QSpinBox(); self.snap_rad = 3
+        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
         
+        snap_check.stateChanged.connect(lambda state: snapbox.setEnabled(state==2))
+        snap_check.stateChanged.connect(lambda state: setattr(self, 'snap_to_max', state==2))
+        
+
         _setup_spin(self, self.threshbox, minval=0, maxval=65535, val=self.thresh, attrname='thresh')
         ptsbtn.clicked.connect(self._new_pts)
         pksbtn.clicked.connect(self._find_peaks)
@@ -104,20 +115,13 @@ class GTWidget(QWidget):
         pks_gbox.addWidget(guessbtn)
         points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
         points_gbox.addWidget(ptsbtn, 5, 0, 1, 2)
+        points_gbox.addWidget(snap_check, 6, 0, 1, 1)
+        points_gbox.addWidget(snapbox, 6, 1, 1, 1)
 
         box3.setLayout(points_gbox)
 
         # Points2labels box ##############################################################
         box5 = QGroupBox('Points to labels')
-
-        rxybtn = QPushButton("Rotate to xy")
-        p2mbtn = QPushButton("Auto-adjust z")
-
-        zbox = QSpinBox()
-        zbox.setMinimum(-50)
-        zbox.setMaximum(50)#self.zmax)
-
-        snapbtn = QPushButton("Snap to max")
 
         p2lbtn = QPushButton("Points to labels")
         advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
@@ -125,18 +129,16 @@ class GTWidget(QWidget):
         # Advanced settings
         self.rad_xy = 6
         self.rad_z = 4
-        self.max_rad_xy = 2
-        self.max_rad_z = 2
-        self.snap_rad = 2
-        self.blur_sig_xy = 0.7
-        self.blur_sig_z = 0.5
+        self.max_rad_xy = 1
+        self.max_rad_z = 1
+        self.blur_sig_xy = 0.5
+        self.blur_sig_z = 0.2
         self.solidity_thresh = 0.8
         self.threshold = 0.5
 
         box5b = QGroupBox('Advanced settings')
         radxybox = QSpinBox(); 
         radzbox = QSpinBox(); 
-        snapbox = QSpinBox(); 
         mradxybox = QSpinBox() ; 
         mradzbox = QSpinBox(); 
         sigxybox = QDoubleSpinBox(); 
@@ -148,7 +150,6 @@ class GTWidget(QWidget):
 
         _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
         _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
-        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
         _setup_spin(self, mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
         _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
         _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
@@ -158,36 +159,32 @@ class GTWidget(QWidget):
         wshedcombo.addItem('Image'); wshedcombo.addItem('Distance')
         wshedcombo.currentTextChanged.connect(lambda name: setattr(self, 'wshed_type', name))
 
-        p2mbtn.clicked.connect(self._auto_z)
-        rxybtn.clicked.connect(self._rxy)
-        zbox.valueChanged[int].connect(self._change_z)
-        zbox.valueChanged[int].connect(lambda: zbox.setValue(0))
-        snapbtn.clicked.connect(self._snap_to_max)
+        
         p2lbtn.clicked.connect(self._points2labels)
         
         box5b.setVisible(False)
         advbtn.toggled.connect(box5b.setVisible)
         
         gbox5b = QGridLayout()
-        gbox5b.addWidget(QLabel('threshold xy rad:'), 0, 0); gbox5b.addWidget(radxybox, 0, 1)
-        gbox5b.addWidget(QLabel('threshold z rad:'), 1, 0); gbox5b.addWidget(radzbox, 1, 1)
-        gbox5b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox5b.addWidget(snapbox, 2, 1)
+        gbox5b.addWidget(QLabel('threshold:'), 0, 0); gbox5b.addWidget(threshbox, 0, 1)
+        gbox5b.addWidget(QLabel('segment xy rad:'), 1, 0); gbox5b.addWidget(radxybox, 1, 1)
+        gbox5b.addWidget(QLabel('segment z rad:'), 2, 0); gbox5b.addWidget(radzbox, 2, 1)
+        # gbox5b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox5b.addWidget(snapbox, 2, 1)
         gbox5b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox5b.addWidget(mradxybox, 3, 1)
         gbox5b.addWidget(QLabel('local max z rad:'), 4, 0); gbox5b.addWidget(mradzbox, 4, 1)
         gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(sigxybox, 5, 1)
         gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(sigzbox, 6, 1)
         gbox5b.addWidget(QLabel('solidity:'), 7, 0); gbox5b.addWidget(solidbox, 7, 1)
-        gbox5b.addWidget(QLabel('threshold:'), 8, 0); gbox5b.addWidget(threshbox, 8, 1)
-        gbox5b.addWidget(QLabel('watershed type:'), 9, 0); gbox5b.addWidget(wshedcombo, 9, 1)
+        gbox5b.addWidget(QLabel('watershed type:'), 8, 0); gbox5b.addWidget(wshedcombo, 8, 1)
         box5b.setLayout(gbox5b)
 
         p2l_gbox = QGridLayout()
         #p2l_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
-        p2l_gbox.addWidget(rxybtn, 1, 0)
-        p2l_gbox.addWidget(p2mbtn, 1, 1)
-        p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
-        p2l_gbox.addWidget(zbox, 2, 1)
-        p2l_gbox.addWidget(snapbtn, 3, 0, 1, 2)  
+        # p2l_gbox.addWidget(rxybtn, 1, 0)
+        # p2l_gbox.addWidget(p2mbtn, 1, 1)
+        # p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
+        # p2l_gbox.addWidget(zbox, 2, 1)
+        # p2l_gbox.addWidget(snapbtn, 3, 0, 1, 2)  
         p2l_gbox.addWidget(p2lbtn, 4, 0, 1, 2)  
         p2l_gbox.addWidget(advbtn, 5, 0, 1, 2)
         p2l_gbox.addWidget(box5b, 6, 0, 1, 2)
@@ -201,12 +198,11 @@ class GTWidget(QWidget):
         self.active_label = QComboBox()
     
         # Label tools box ################################################################
+        box4 = QGroupBox('Labels tools')
         self.labcheck = QCheckBox("Make labels editable")
         self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
         self.labcheck.stateChanged.connect(self._set_editable)
         self.active_label.currentTextChanged.connect(self._set_editable)
-        
-        box4 = QGroupBox('Labels tools')
         self.labelbox = QSpinBox(); self.rem_label = 1
         addbtn = QPushButton("New label")
         addbtn.clicked.connect(self._add_label)
@@ -216,12 +212,12 @@ class GTWidget(QWidget):
         self.active_label.currentTextChanged.connect(self._connect_label_events)
 
         self.active_merge_label = QComboBox(); 
-        mlsbtn = QPushButton("Merge labels")        
+        self.mlsbtn = QPushButton("Merge labels")        
         l2pbtn = QPushButton("Labels to points")
         selectLabelsbtn = QPushButton("Keep labels from points")
 
-        mlsbtn.clicked.connect(self._merge_labels)
-        mlsbtn.clicked.connect(self._set_max_label)
+        self.mlsbtn.clicked.connect(self._merge_labels)
+        self.mlsbtn.clicked.connect(self._set_max_label)
         removebtn.clicked.connect(self._remove_label)
         l2pbtn.clicked.connect(self._labels2points)
         selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
@@ -235,7 +231,7 @@ class GTWidget(QWidget):
         #labels_gbox.addWidget(self.maxlab, 3, 0)
         labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
         labels_gbox.addWidget(self.active_merge_label, 4, 1); 
-        labels_gbox.addWidget(mlsbtn, 5, 0, 1, 2)
+        labels_gbox.addWidget(self.mlsbtn, 5, 0, 1, 2)
         labels_gbox.addWidget(l2pbtn, 6, 0, 1, 2)
         labels_gbox.addWidget(selectLabelsbtn, 7, 0, 1, 2)
 
@@ -246,10 +242,16 @@ class GTWidget(QWidget):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
         label_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Labels"]
         point_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Points"]
-
+        
         img_choice = self.active_image.currentText()
         pts_choice = self.active_points.currentText()
         label_choice = self.active_label.currentText()
+        if len(label_layers) <= 1:
+            self.active_merge_label.setEnabled(False)
+            self.mlsbtn.setEnabled(False)
+        else:
+            self.active_merge_label.setEnabled(True)
+            self.mlsbtn.setEnabled(True)
         merge_label_choice = self.active_merge_label.currentText()
         
         for combo in (self.active_image, self.active_points, self.active_label, self.active_merge_label):
@@ -280,6 +282,133 @@ class GTWidget(QWidget):
         
         n = self.viewer.layers[lab].data.max()
         self.viewer.layers[lab].selected_label = (n + 1)
+
+    def _connect_point_events(self):
+        # remove connection first:
+        for layer in self.viewer.layers:
+            if layer.__class__.__name__ == "Points" and layer.name != self.active_points.currentText():
+                if self._mouse_click in layer.mouse_drag_callbacks:
+                    layer.mouse_drag_callbacks.remove(self._mouse_click)
+        # add only to active points layer:
+        pt_layer = self.viewer.layers[self.active_points.currentText()] if self.active_points.currentText() in self.viewer.layers else None
+        if pt_layer is None:
+            return
+        pt_layer.mouse_drag_callbacks.append(self._mouse_click)
+
+    def _mouse_click(self, layer, event):
+        # ADAPTED FROM https://github.com/bburan/napari-synaptogram
+        if layer.mode != "pan_zoom":
+            # A tool (e.g., add, remove, select) is being used. Don't interfere
+            # with what's already going on otherwise we may end up with
+            # duplicate points or delete two points.
+            return
+        if event.buttons[0] == 2:
+            if "Shift" in event.modifiers:
+                self._remove_point(layer, event)
+            else:
+                self._add_point(layer, event)
+
+    def _remove_point(self, layer, event):
+        try:
+            position = layer.world_to_data(event.position)
+            
+            if len(layer.data) == 0:
+                return
+                
+            distances = np.linalg.norm(layer.data - position, axis=1)
+            closest_idx = np.argmin(distances)
+            closest_distance = distances[closest_idx]
+            
+            new_data = np.delete(layer.data, closest_idx, axis=0)
+            layer.data = new_data
+                
+        except Exception as e:
+            print(f"Error removing point: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _add_point(self, layer, event):
+        image_layer = self.active_image.currentText()
+        image_layer = self.viewer.layers[image_layer] if image_layer in self.viewer.layers else None
+        if image_layer is None:
+            print("No image layer selected")
+            return
+        
+        # print(f"Adding point. View mode: {'2D' if self.viewer.dims.ndisplay == 2 else '3D'}")
+        
+        if self.viewer.dims.ndisplay == 2:
+            # Logic for handling 2D view.
+            near_point = list(event.position)
+            far_point = list(event.position)
+    
+            # Find the axis to project the ray along.
+            ray_axis = ({0, 1, 2} - set(self.viewer.dims.displayed)).pop()
+    
+            # Get the thickness of the view. The thickness is the full range
+            # (lower to upper), but point click is in the center.
+            thickness = self.viewer.dims.thickness[ray_axis] / 2
+            near_point[ray_axis] += thickness
+            far_point[ray_axis] -= thickness
+            near_point = image_layer.world_to_data(near_point)
+            far_point = image_layer.world_to_data(far_point)
+            
+            # print(f"2D mode - Near: {near_point}, Far: {far_point}, Thickness: {thickness}")
+            
+            if thickness == 0:
+                # print("Zero thickness, adding point directly at near_point")
+                layer.add(near_point)
+                return
+        else:
+            # Logic for handling 3D view.
+            # Find coordinates where ray enters/exists layer bounding box.
+            near_point, far_point = image_layer.get_ray_intersections(
+                event.position, event.view_direction, event.dims_displayed
+            )
+            if (near_point is None) or (far_point is None):
+                print("Ray intersection failed - no valid near/far points")
+                return
+            
+            # print(f"3D mode - Near: {near_point}, Far: {far_point}")
+    
+        try:
+            num_samples = 25
+            ray = np.linspace(near_point, far_point, num_samples, endpoint=True)
+            
+            ray_clamped = np.copy(ray)
+            for i in range(ray.shape[1]):
+                ray_clamped[:, i] = np.clip(ray[:, i], 0, image_layer.data.shape[i] - 1)
+            
+            intensities = map_coordinates(
+                image_layer.data,
+                ray_clamped.T,
+                order=1,  
+                mode="constant",
+                cval=0,
+                prefilter=False,  
+            )
+            
+            max_idx = intensities.argmax()
+            max_point = ray[max_idx]
+            # print(f"Max intensity: {intensities[max_idx]} at point: {max_point}")
+            
+            if self.snap_to_max and self.snap_rad > 0:
+                initial_point = np.round(max_point).astype(int)
+                search_region = []
+                for dim in range(3):
+                    start = max(0, initial_point[dim] - self.snap_rad)
+                    end = min(image_layer.data.shape[dim], initial_point[dim] + self.snap_rad + 1)
+                    search_region.append(slice(start, end))
+                search_data = image_layer.data[tuple(search_region)]
+                local_max_pt = np.unravel_index(np.argmax(search_data), search_data.shape)
+                max_point = np.array([local_max_pt[dim] + search_region[dim].start for dim in range(3)])
+                # print(f"Snapped to local max point: {max_point}")
+            layer.add(max_point)
+            # print(f"Point added successfully")
+            
+        except Exception as e:
+            print(f"Error in _add_point: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def setup_save_box(self):
@@ -673,6 +802,7 @@ class GTWidget(QWidget):
             const = max0+1-min0
             labels2.data[mask] = labels2.data[mask]+const
         labels.data[mask] = labels2.data[mask][:]
+        self._renumber_labels(self.active_label.currentText())
         labels.refresh()
         self._set_max_label()
         self.viewer.layers.remove(self.active_merge_label.currentText())
@@ -685,6 +815,16 @@ class GTWidget(QWidget):
             #del self.active_points.currentText()
         except:
             print("Points layer doesn't exist")
+
+    def _renumber_labels(self, layer_name):
+        labels_layer = self.viewer.layers[layer_name]
+        self._convert_dask(layer_name)
+        labels_data = labels_layer.data
+        props = regionprops(labels_data)
+        new_labels = np.zeros_like(labels_data)
+        for new_label, prop in enumerate(props, start=1):
+            new_labels[labels_data == prop.label] = new_label
+        labels_layer.data = new_labels
         
     def _labels2points(self):
         try:
@@ -744,9 +884,6 @@ class GTWidget(QWidget):
 
         markers = np.zeros(img.shape, dtype='int')
         mask = np.zeros(img.shape, dtype='bool')
-
-        if self.snap_rad>0:
-            self._snap_to_max
 
         # make markers:
         count = 1
@@ -815,42 +952,6 @@ class GTWidget(QWidget):
         self.viewer.add_labels(outlabels, name='labels from '+self.active_points.currentText())
         
         self.active_merge_label.setCurrentText(self.viewer.layers[-1].name)
-
-    def _snap_to_max(self):
-        should_break=False
-        try:
-            pts = self.viewer.layers[self.active_points.currentText()].data
-        except:
-            print("Points layer not defined.")
-            should_break=True
-        try:
-            img = self.viewer.layers[self.active_image.currentText()].data
-        except:
-            print("Image layer not defined.")
-            should_break=True
-        if self.snap_rad<=0:
-            print("Snap radius must be >0.")
-            should_break=True
-        if should_break:
-            print("Snap to max could not complete. Make sure correct image and points layers are selected.")
-            return
-        
-        blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
-        img_inv = gaussian_filter(np.min(img) + np.max(img) - img, blur_sig)
-        count = 0
-
-        for pos in pts:
-            pos = np.round(pos).astype('int')
-            zrange, yrange, xrange, rel_pos = self._get_slices(self.snap_rad, self.snap_rad, pos, img.shape)
-            pointIntensity = img_inv[zrange, yrange, xrange]
-
-            shift = np.unravel_index(np.argmin(pointIntensity), pointIntensity.shape)
-            shift = np.asarray(shift)-self.snap_rad
-
-            pos = (pos + shift).astype('int')
-            pts[count] = pos
-            count += 1
-        self.viewer.layers[self.active_points.currentText()].refresh()
 
 
     def _get_slices(self, rad_xy, rad_z, loc, shape):
