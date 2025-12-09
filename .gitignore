@@ -84,3 +84,6 @@ venv/
 **/_version.py
 
 *ctbp2_sdt_3d_model
+
+# test file:
+test.py

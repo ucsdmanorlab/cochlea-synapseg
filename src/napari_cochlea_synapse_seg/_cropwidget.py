@@ -9,6 +9,7 @@ from skimage.restoration import rolling_ball
 from skimage.filters import threshold_yen, threshold_li, threshold_otsu
 from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
+import matplotlib.pyplot as plt
 
 class CropWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
@@ -89,9 +90,14 @@ class CropWidget(QWidget):
         sort_layout.addWidget(self.sort_combo)
         layout.addLayout(sort_layout)
         # add save checkbox:
+        save_layout = QHBoxLayout()
         self.save_check = QCheckBox("Save crops to disk")
         self.save_check.setChecked(False)
-        layout.addWidget(self.save_check)
+        self.save_montage_check = QCheckBox("Save montage to disk")
+        self.save_montage_check.setChecked(False)
+        save_layout.addWidget(self.save_check)
+        save_layout.addWidget(self.save_montage_check)
+        layout.addLayout(save_layout)
         self.save_dir = os.path.expanduser("~")
         
         self.crop_btn = QPushButton("Create Montage")
@@ -269,10 +275,10 @@ class CropWidget(QWidget):
                 montage_on = True            
         
     def get_save_directory(self):
-        if self.save_check.isChecked():
+        if self.save_check.isChecked() or self.save_montage_check.isChecked():
             save_dir = QFileDialog.getExistingDirectory(
                 self, 
-                "Select Directory to Save Crops",
+                "Select Directory to Save Outputs",
                 self.save_dir
             )
             if save_dir:
@@ -283,7 +289,7 @@ class CropWidget(QWidget):
     def create_montage(self):
         # Get save directory if checkbox is checked
         save_dir = self.get_save_directory()
-        if self.save_check.isChecked() and not save_dir:
+        if (self.save_check.isChecked() or self.save_montage_check.isChecked()) and not save_dir:
             return  # User cancelled directory selection
         
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
@@ -376,9 +382,11 @@ class CropWidget(QWidget):
         post_syn = [post_syn[i] for i in sorted_indices]
         
         if self.save_check.isChecked():
+            crop_dir = os.path.join(self.save_dir, "crops")
+            os.makedirs(crop_dir, exist_ok=True)
             for (id, post, c1, c2) in zip(ids, post_syn, crops1, crops2):
                 suff = '_pair' if post else '_orphan'
-                filename = os.path.join(self.save_dir, f"crop_{id}{suff}.tiff")
+                filename = os.path.join(crop_dir, f"crop_{id}{suff}.tiff")
                 # Create metadata for ImageJ composite mode with green/magenta LUTs
                 metadata = {
                     'axes': 'ZCYX',
@@ -444,4 +452,23 @@ class CropWidget(QWidget):
             name='Montage labels',
             blending='additive',
         )
-    
+        if self.save_montage_check.isChecked():
+            suff = '_montage.pdf'
+            filename = os.path.join(self.save_dir, f"montage_{self.sort_combo.currentText()}{suff}")
+
+            # create rgb image:
+            rgb_montage = np.zeros((montage1.shape[1], montage1.shape[2], 3), dtype=montage1.dtype)
+            rgb_montage[..., 0] = np.max(montage1, axis=0)  # Red channel (presynaptic)
+            rgb_montage[..., 2] = np.max(montage1, axis=0)  # Blue + red = magenta (presynaptic)
+            rgb_montage[..., 1] = np.max(montage2, axis=0)  # Green channel (postsynaptic)
+
+            plt.figure(figsize=(10,10))
+            plt.imshow(rgb_montage)
+            plt.axis('off')
+            
+            # add text labels:
+            for (id, post, cent) in zip(ids, post_syn, cents):
+                color = 'white' if post else 'red'
+                plt.text(cent[2], cent[1]+target_shape[1]//2-1, str(id), color=color, fontsize=12, ha='center', va='center')
+            plt.tight_layout()
+            plt.savefig(filename)

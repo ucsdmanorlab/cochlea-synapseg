@@ -30,6 +30,7 @@ dependencies = [
     "scikit-image",
     "scipy",
     "zarr",
+    "matplotlib",
     "napari[all]",
     "gunpowder",
     "torch",

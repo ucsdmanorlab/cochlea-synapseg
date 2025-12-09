@@ -12,6 +12,12 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from skimage.util import random_noise
 
+def normalize(im, maxval=255, dtype=np.uint8):
+    imin = np.min(im)
+    imax = np.max(im)
+    imout = (im - imin)/(imax - imin)*maxval
+    return imout.astype(dtype)
+
 def make_sample_data():
     """Generates an image"""
     # Return list of tuples
@@ -37,7 +43,7 @@ def make_sample_data():
 
     imout = gaussian_filter(imout, sigma=synapse_size)
     
-    return [(imout, {"name": "simulated_synapses"})]
+    return [(normalize(imout), {"name": "simulated_synapses"})]
 
 def make_sample_data_with_noise():
     """Generates an image"""
@@ -68,7 +74,7 @@ def make_sample_data_with_noise():
     imout = random_noise(imout, mode='poisson')
     imout = random_noise(imout, mode='speckle')
     
-    return [(imout, {"name": "simulated_synapses_noise"})]
+    return [(normalize(imout), {"name": "simulated_synapses_noise"})]
 
 def make_sample_data_pairs():
     """Generates an image"""
@@ -80,7 +86,7 @@ def make_sample_data_pairs():
 
     image_size = (50, 512, 512) #3D
     Nsynapses = 50
-    synapse_size = (3, 5, 5) # gaussian radii
+    synapse_size = (3, 3, 3) # gaussian radii
     synapse_mag_max = 700
     synapse_mag_min = 300
     
@@ -110,6 +116,6 @@ def make_sample_data_pairs():
     post_syn = gaussian_filter(post_syn, sigma=synapse_size)
 
     return [
-        (pre_syn, {"name": "pre_synaptic", "colormap": "green"}),
-        (post_syn, {"name": "post_synaptic", "colormap": "magenta", "blending": "additive"}),
+        (normalize(pre_syn), {"name": "pre_synaptic", "colormap": "green"}),
+        (normalize(post_syn), {"name": "post_synaptic", "colormap": "magenta", "blending": "additive"}),
     ]
