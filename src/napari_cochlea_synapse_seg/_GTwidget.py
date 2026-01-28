@@ -12,6 +12,7 @@ from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
 from skimage.filters import threshold_triangle
 from napari.layers.utils.stack_utils import stack_to_images
+from napari.utils.notifications import show_error, show_info
 from qtpy.QtGui import QFontMetrics
 
 from ._reader import napari_get_reader
@@ -326,11 +327,9 @@ class GTWidget(QWidget):
         image_layer = self.active_image.currentText()
         image_layer = self.viewer.layers[image_layer] if image_layer in self.viewer.layers else None
         if image_layer is None:
-            print("No image layer selected")
+            show_error("Load image layer first.")
             return
-        
-        # print(f"Adding point. View mode: {'2D' if self.viewer.dims.ndisplay == 2 else '3D'}")
-        
+                
         if self.viewer.dims.ndisplay == 2:
             # Logic for handling 2D view.
             near_point = list(event.position)
@@ -346,11 +345,8 @@ class GTWidget(QWidget):
             far_point[ray_axis] -= thickness
             near_point = image_layer.world_to_data(near_point)
             far_point = image_layer.world_to_data(far_point)
-            
-            # print(f"2D mode - Near: {near_point}, Far: {far_point}, Thickness: {thickness}")
-            
+                        
             if thickness == 0:
-                # print("Zero thickness, adding point directly at near_point")
                 layer.add(near_point)
                 return
         else:
@@ -360,10 +356,9 @@ class GTWidget(QWidget):
                 event.position, event.view_direction, event.dims_displayed
             )
             if (near_point is None) or (far_point is None):
-                print("Ray intersection failed - no valid near/far points")
+                show_error("Ray intersection failed - no valid near/far points")
                 return
             
-            # print(f"3D mode - Near: {near_point}, Far: {far_point}")
     
         try:
             num_samples = 25
@@ -384,7 +379,6 @@ class GTWidget(QWidget):
             
             max_idx = intensities.argmax()
             max_point = ray[max_idx]
-            # print(f"Max intensity: {intensities[max_idx]} at point: {max_point}")
             
             if self.snap_to_max and self.snap_rad > 0:
                 initial_point = np.round(max_point).astype(int)
@@ -396,12 +390,10 @@ class GTWidget(QWidget):
                 search_data = image_layer.data[tuple(search_region)]
                 local_max_pt = np.unravel_index(np.argmax(search_data), search_data.shape)
                 max_point = np.array([local_max_pt[dim] + search_region[dim].start for dim in range(3)])
-                # print(f"Snapped to local max point: {max_point}")
             layer.add(max_point)
-            # print(f"Point added successfully")
             
         except Exception as e:
-            print(f"Error in _add_point: {e}")
+            show_error(f"Error in _add_point: {e}")
             import traceback
             traceback.print_exc()
 
@@ -510,12 +502,12 @@ class GTWidget(QWidget):
         try:
             raw = self.viewer.layers[self.active_image.currentText()].data
         except:
-            print("Image layer not defined.")
+            show_info("Image layer not defined. Image will not be saved.")
             raw = None
         try:
             labels = self.viewer.layers[self.active_label.currentText()].data
         except:
-            print("Labels layer not defined.")
+            show_info("Labels layer not defined. Labels will not be saved.")
             labels = None
 
         for (name, data, process_func) in (('raw', raw, self._process_raw), ('labeled', labels, self._process_labels)):
@@ -551,6 +543,7 @@ class GTWidget(QWidget):
                     zarrfi[f'{name}'] = process_func(data)
                 zarrfi[f'{name}'].attrs['offset'] = [0,]*3
                 zarrfi[f'{name}'].attrs['resolution'] = [1,]*3
+            show_info(f'Saved {name} to {self.file_name_input.text()}')
 
     def _process_raw(self, rawdata):
         return normalize(rawdata.astype(np.uint16), 
@@ -565,7 +558,7 @@ class GTWidget(QWidget):
         except:
             # not a dask
             return
-        print('converting layer '+layer_name+' to numpy array')
+        show_info('converting layer '+layer_name+' to numpy array')
         self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
         self.labcheck.setCheckState(2)
 
@@ -580,7 +573,7 @@ class GTWidget(QWidget):
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. No peaks detected.")
             return
         
         self._new_pts()
@@ -589,7 +582,7 @@ class GTWidget(QWidget):
         img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
         peaks = peak_local_max(img_filtered, threshold_abs=self.thresh, min_distance=2)
         if len(peaks) == 0:
-            print("No peaks found with the current threshold.")
+            show_info("No peaks found with the current threshold.")
             return
         
         pts.data = np.array(peaks, dtype=np.float32)
@@ -599,7 +592,7 @@ class GTWidget(QWidget):
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. Cannot calculate peak threshold.")
             return
         img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
         initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1)
@@ -671,12 +664,12 @@ class GTWidget(QWidget):
         try:
             pts = self.viewer.layers[self.active_points.currentText()]
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot auto-adjust Z positions.")
             should_break=True
         try:
             img = self.viewer.layers[self.active_image.currentText()]
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. Cannot auto-adjust Z positions.")
             should_break=True
 
         if not should_break:
@@ -697,7 +690,7 @@ class GTWidget(QWidget):
         try:
             self.viewer.layers[self.active_points.currentText()]
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot change Z positions.")
             should_break=True
         if not should_break:
             for pt in self.viewer.layers[self.active_points.currentText()].selected_data:
@@ -735,12 +728,12 @@ class GTWidget(QWidget):
         try:
             labels = self.viewer.layers[self.active_label.currentText()]
         except:
-            print("Labels layer not defined.")
+            show_error("Labels layer not defined. Cannot remove labels.")
             should_break = True
         try:
             points = self.viewer.layers[self.active_points.currentText()]
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Labels to be removed undefined.")
             should_break = True
         if should_break:
             return
@@ -758,7 +751,7 @@ class GTWidget(QWidget):
         try:
             labels = self.viewer.layers[self.active_label.currentText()]
         except:
-            print("Labels layer not defined.")
+            show_error("Labels layer not defined. Cannot remove label.")
             should_break = True
         if should_break:
             return
@@ -776,16 +769,16 @@ class GTWidget(QWidget):
             labels = self.viewer.layers[self.active_label.currentText()]
             self._convert_dask(self.active_label.currentText())
         except:
-            print("Labels layer not defined.")
+            show_error("Labels layer not defined. Cannot merge labels.")
             should_break = True
         try:
             labels2 = self.viewer.layers[self.active_merge_label.currentText()]
             self._convert_dask(self.active_merge_label.currentText())
         except:
-            print("Merge labels layer not defined.")
+            show_error("Merge labels layer not defined. Cannot merge labels.")
             should_break = True
         if labels == labels2:
-            print("Cannot merge labels with itself.")
+            show_error("Cannot merge labels with itself.")
             should_break = True
         if should_break:
             return
@@ -809,7 +802,7 @@ class GTWidget(QWidget):
             #self.viewer.layers.remove(self.active_points.currentText())
             #del self.active_points.currentText()
         except:
-            print("Points layer doesn't exist")
+            pass
 
     def _renumber_labels(self, layer_name):
         labels_layer = self.viewer.layers[layer_name]
@@ -825,7 +818,7 @@ class GTWidget(QWidget):
         try:
             labels = self.viewer.layers[self.active_label.currentText()].data
         except:
-            print("Labels layer not defined. Labels to points function exited.")
+            show_error("Labels layer not defined. Labels to points function exited.")
             return
         # cannot operate on dask...
         self._convert_dask(self.active_label.currentText())
@@ -850,12 +843,12 @@ class GTWidget(QWidget):
         try:
             pts = self.viewer.layers[self.active_points.currentText()].data
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot convert points to labels.")
             should_break=True
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. Cannot convert points to labels.")
             should_break=True
         try:
             labels = self.viewer.layers[self.active_label.currentText()].data
@@ -868,7 +861,7 @@ class GTWidget(QWidget):
             curr_n = 0
         
         if should_break:
-            print("Points to labels function exited.")
+            show_error("Points to labels function exited.")
             return
         
         blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
@@ -882,10 +875,21 @@ class GTWidget(QWidget):
 
         # make markers:
         count = 1
+        rem_list = []
         for pos in pts: 
             pos = np.round(pos).astype('int')
-            markers[tuple(pos)] = count+curr_n
+            try:
+                markers[tuple(pos)] = count+curr_n
+            except:
+                show_info("Point "+str(pos)+" is outside image bounds. Skipping.")
+                rem_list.append(count-1)
             count += 1
+        if len(rem_list)>0:
+            pts = np.delete(pts, rem_list, axis=0)
+            # make invalid points red and large:
+            self.viewer.layers[self.active_points.currentText()].face_color[rem_list] = [1,0,0,1]
+            self.viewer.layers[self.active_points.currentText()].size[rem_list] = 5*self.viewer.layers[self.active_points.currentText()].size[rem_list]
+            self.viewer.layers[self.active_points.currentText()].refresh()
 
         # make mask:
         count = 1
@@ -941,9 +945,6 @@ class GTWidget(QWidget):
                     distance_transform_edt(markers==0, sampling=[3,1,1]),
                     markers=markers,
                     mask=mask)
-        else:
-            print('invalid watershed type')
-            return
         self.viewer.add_labels(outlabels, name='labels from '+self.active_points.currentText())
         
         self.active_merge_label.setCurrentText(self.viewer.layers[-1].name)
