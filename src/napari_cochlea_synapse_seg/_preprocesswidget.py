@@ -3,13 +3,15 @@ This module provides a custom QWidget class (GTWidget) for use with the napari v
 It includes various functionalities to display synapse images, edit and create point and
 label annotations, interconvert between points and labels, and save data in as .zarr.
 """
+import numpy as np
+import tifffile
+
 from typing import TYPE_CHECKING
 from ._widget_utils import _setup_spin, _limitStretch
 
 from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
 from napari.layers.utils.stack_utils import stack_to_images
-import numpy as np
-import tifffile
+from napari.utils.notifications import show_info, show_error
 
 if TYPE_CHECKING:
     import napari
@@ -147,7 +149,7 @@ class PreProcessWidget(QWidget):
         try:
             pts = self.viewer.layers[self.active_points.currentText()]
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot convert.")
             return
         
         pts.data[:,0] = pts.data[:,0]/self.nch
@@ -157,13 +159,13 @@ class PreProcessWidget(QWidget):
         try:
             img = self.viewer.layers[self.active_image.currentText()]
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. Channels cannot be split.")
             return
         
         ll = self.viewer.layers
         layer = img
         if self.split_choice.currentText() == "None":
-            print("Choose channel dimension.")
+            show_error("Choose channel dimension to split.")
             return
         else:
             axis = int(self.split_choice.currentText().split(':')[0].split(' ')[-1])
@@ -180,7 +182,7 @@ class PreProcessWidget(QWidget):
         try:
             pts = self.viewer.layers[self.active_points.currentText()]
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot scale points.")
             return
         
         pts.data[:,0] = pts.data[:,0]/self.zres
@@ -237,18 +239,17 @@ class PreProcessWidget(QWidget):
         try:
             pts = self.viewer.layers[self.active_points.currentText()].data
         except:
-            print("Points layer not defined.")
+            show_error("Points layer not defined. Cannot complete snap to max.")
             should_break=True
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
-            print("Image layer not defined.")
+            show_error("Image layer not defined. Cannot complete snap to max.")
             should_break=True
         if self.snap_rad<=0:
-            print("Snap radius must be >0.")
+            show_error("Snap radius must be >0. Cannot complete snap to max.")
             should_break=True
         if should_break:
-            print("Snap to max could not complete. Make sure correct image and points layers are selected.")
             return
         
         #blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
@@ -274,7 +275,7 @@ class PreProcessWidget(QWidget):
         except:
             # not a dask
             return
-        print('converting layer '+layer_name+' to numpy array')
+        show_info('converting layer '+layer_name+' to numpy array')
         self.viewer.layers[layer_name].data = self.viewer.layers[layer_name].data.compute()
 
     def _set_editable(self):

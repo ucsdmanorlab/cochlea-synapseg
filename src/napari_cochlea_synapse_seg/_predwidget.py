@@ -4,21 +4,20 @@ It includes various functionalities to display synapse images, edit and create p
 label annotations, interconvert between points and labels, and save data in as .zarr.
 """
 from typing import TYPE_CHECKING
-from qtpy.QtWidgets import QTabWidget, QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
-from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mass
+from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
+from scipy.ndimage import gaussian_filter
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops_table
 from skimage.segmentation import watershed
 from skimage.util import map_array
 from napari.utils import progress
-from napari.utils.notifications import show_info
+from napari.utils.notifications import show_info, show_error
 
 from ._widget_utils import _setup_spin 
 from ._predict import predict
 import os
 import numpy as np
 import zarr
-import tifffile
 import requests
 
 if TYPE_CHECKING:
@@ -182,11 +181,11 @@ class PredWidget(QWidget):
 
     def _predict(self):
         if self.model_path_input.text() == '':
-            print("Model path is empty. Please select a model file.")
+            show_info("Model path is empty. Please select a model file.")
             return
         elif self.model_path_input.text().endswith('ctbp2_sdt_3d_model'):
             if not os.path.exists(self.model_path_input.text()):
-                print("Downloading default model...")
+                show_info("Downloading default model...")
                 URL = "https://github.com/ucsdmanorlab/cochlea-synapseg/releases/download/v0.1.1/ctbp2_sdt_3d_model"
                 self._download_model_with_napari_progress(URL, self.model_path_input.text(), expected_bytes=540535054)
                 # with requests.get(URL, stream=True) as r:
@@ -216,7 +215,6 @@ class PredWidget(QWidget):
 
     def _browse_for_model(self):
         model_file = QFileDialog.getOpenFileName(self, "Select Model File")
-        print(model_file)
         if model_file[0]:
             self.model_path_input.setText(model_file[0])
 
@@ -261,14 +259,14 @@ class PredWidget(QWidget):
         except:
             # not a dask
             return
-        print('converting layer '+layer_name+' to numpy array')
+        show_info('converting layer '+layer_name+' to numpy array')
         self.viewer.layers[layer_name].data = np.array(self.viewer.layers[layer_name].data)
     
     def _get_peaks(self):
         try:
             img_layer = self.viewer.layers[self.active_image.currentText()]
         except:
-            print("Image layer not defined.")
+            show_error("Prediction layer not defined. Peaks not found.")
             return
         self._convert_dask(self.active_image.currentText())
         img = img_layer.data
@@ -285,13 +283,12 @@ class PredWidget(QWidget):
                     threshold_abs=self.peak_thresh,
                     min_distance=self.min_distance,
                     )
-        print(coords.shape)
         return coords
     def _pred2labels(self):
         try:
             img_layer = self.viewer.layers[self.active_image.currentText()]
         except:
-            print("Image layer not defined.")
+            show_error("Prediction layer not defined. Labels cannot be calculated.")
             return
         self._convert_dask(self.active_image.currentText())
         img = img_layer.data

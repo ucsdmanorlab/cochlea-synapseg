@@ -11,11 +11,9 @@ from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
 from skimage.filters import threshold_triangle
-from napari.layers.utils.stack_utils import stack_to_images
 from napari.utils.notifications import show_error, show_info
 from qtpy.QtGui import QFontMetrics
 
-from ._reader import napari_get_reader
 from ._widget_utils import _setup_spin, _limitStretch
 import os
 import numpy as np
@@ -43,6 +41,7 @@ class GTWidget(QWidget):
         self.update_layer_choices()
         self.viewer.layers.events.inserted.connect(self.update_layer_choices)
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
+        self.update_possible_functions()
         # self.viewer.layers.events.inserted.connect(self._rescan_layers, position="last")
         # self.viewer.layers.events.removed.connect(self._rescan_layers, position="last")
 
@@ -67,6 +66,7 @@ class GTWidget(QWidget):
         self.active_image.currentTextChanged.connect(lambda: self.zresbox.setValue(self.zres))
         self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(
             int(self.viewer.layers[self.active_image.currentText()].data.max())) if self.active_image.currentText() in self.viewer.layers else None)
+        self.active_image.currentTextChanged.connect(self.update_possible_functions)
         self.z_scale.stateChanged.connect(self._set_z_scale)
 
         image_gbox = QVBoxLayout()
@@ -89,12 +89,13 @@ class GTWidget(QWidget):
         # Point tools box ################################################################
         self.active_points = QComboBox()
         self.active_points.currentTextChanged.connect(self._connect_point_events)
+        self.active_points.currentTextChanged.connect(self.update_possible_functions)
         
         box3 = QGroupBox('Points tools')
         ptsbtn = QPushButton("New points layer")
-        pksbtn = QPushButton("Find peaks above:")
+        self.pksbtn = QPushButton("Find peaks above:")
         self.threshbox = QSpinBox(); self.thresh=10000
-        guessbtn = QPushButton("Guess")
+        self.guessbtn = QPushButton("Guess")
 
         snap_check = QCheckBox("Snap to max"); self.snap_to_max = True; snap_check.setChecked(self.snap_to_max)
         snapbox = QSpinBox(); self.snap_rad = 3
@@ -106,15 +107,15 @@ class GTWidget(QWidget):
 
         _setup_spin(self, self.threshbox, minval=0, maxval=65535, val=self.thresh, attrname='thresh')
         ptsbtn.clicked.connect(self._new_pts)
-        pksbtn.clicked.connect(self._find_peaks)
-        guessbtn.clicked.connect(self._calc_pk_thresh)
+        self.pksbtn.clicked.connect(self._find_peaks)
+        self.guessbtn.clicked.connect(self._calc_pk_thresh)
 
         points_gbox = QGridLayout()
         points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(self.active_points, 0, 1)
         pks_gbox = QHBoxLayout()
-        pks_gbox.addWidget(pksbtn)
+        pks_gbox.addWidget(self.pksbtn)
         pks_gbox.addWidget(self.threshbox)
-        pks_gbox.addWidget(guessbtn)
+        pks_gbox.addWidget(self.guessbtn)
         points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
         points_gbox.addWidget(ptsbtn, 5, 0, 1, 2)
         points_gbox.addWidget(snap_check, 6, 0, 1, 1)
@@ -125,7 +126,7 @@ class GTWidget(QWidget):
         # Points2labels box ##############################################################
         box5 = QGroupBox('Points to labels')
 
-        p2lbtn = QPushButton("Points to labels")
+        self.p2lbtn = QPushButton("Points to labels")
         advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
                 
         # Advanced settings
@@ -162,7 +163,7 @@ class GTWidget(QWidget):
         wshedcombo.currentTextChanged.connect(lambda name: setattr(self, 'wshed_type', name))
 
         
-        p2lbtn.clicked.connect(self._points2labels)
+        self.p2lbtn.clicked.connect(self._points2labels)
         
         box5b.setVisible(False)
         advbtn.toggled.connect(box5b.setVisible)
@@ -187,7 +188,7 @@ class GTWidget(QWidget):
         # p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
         # p2l_gbox.addWidget(zbox, 2, 1)
         # p2l_gbox.addWidget(snapbtn, 3, 0, 1, 2)  
-        p2l_gbox.addWidget(p2lbtn, 4, 0, 1, 2)  
+        p2l_gbox.addWidget(self.p2lbtn, 4, 0, 1, 2)  
         p2l_gbox.addWidget(advbtn, 5, 0, 1, 2)
         p2l_gbox.addWidget(box5b, 6, 0, 1, 2)
         
@@ -206,39 +207,87 @@ class GTWidget(QWidget):
         self.labcheck.stateChanged.connect(self._set_editable)
         self.active_label.currentTextChanged.connect(self._set_editable)
         self.labelbox = QSpinBox(); self.rem_label = 1
-        addbtn = QPushButton("New label")
-        addbtn.clicked.connect(self._add_label)
-        removebtn = QPushButton("Remove label")
+        self.addbtn = QPushButton("New label")
+        self.addbtn.clicked.connect(self._add_label)
+        self.removebtn = QPushButton("Remove label")
         self.maxlab = QLabel("max label: ")
         self.active_label.currentTextChanged.connect(self._set_max_label)
         self.active_label.currentTextChanged.connect(self._connect_label_events)
+        self.active_label.currentTextChanged.connect(self.update_possible_functions)
 
         self.active_merge_label = QComboBox(); 
         self.mlsbtn = QPushButton("Merge labels")        
-        l2pbtn = QPushButton("Labels to points")
-        selectLabelsbtn = QPushButton("Keep labels from points")
+        self.l2pbtn = QPushButton("Labels to points")
+        self.selectLabelsbtn = QPushButton("Keep labels from points")
 
         self.mlsbtn.clicked.connect(self._merge_labels)
         self.mlsbtn.clicked.connect(self._set_max_label)
-        removebtn.clicked.connect(self._remove_label)
-        l2pbtn.clicked.connect(self._labels2points)
-        selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
+        self.removebtn.clicked.connect(self._remove_label)
+        self.l2pbtn.clicked.connect(self._labels2points)
+        self.selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
         _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
 
         labels_gbox = QGridLayout()
         labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(self.active_label, 0, 1)
-        labels_gbox.addWidget(self.labcheck, 1, 0); labels_gbox.addWidget(addbtn, 1, 1)
+        labels_gbox.addWidget(self.labcheck, 1, 0); labels_gbox.addWidget(self.addbtn, 1, 1)
         labels_gbox.addWidget(self.labelbox, 2, 0)
-        labels_gbox.addWidget(removebtn, 2, 1)
+        labels_gbox.addWidget(self.removebtn, 2, 1)
         #labels_gbox.addWidget(self.maxlab, 3, 0)
         labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
         labels_gbox.addWidget(self.active_merge_label, 4, 1); 
         labels_gbox.addWidget(self.mlsbtn, 5, 0, 1, 2)
-        labels_gbox.addWidget(l2pbtn, 6, 0, 1, 2)
-        labels_gbox.addWidget(selectLabelsbtn, 7, 0, 1, 2)
+        labels_gbox.addWidget(self.l2pbtn, 6, 0, 1, 2)
+        labels_gbox.addWidget(self.selectLabelsbtn, 7, 0, 1, 2)
 
         box4.setLayout(labels_gbox)        
         self.layout().addWidget(box4)
+
+    def update_possible_functions(self, event=None):
+        # IMAGE FUNCS
+        if self.active_image.currentText() == '':
+            self.pksbtn.setEnabled(False)
+            self.guessbtn.setEnabled(False)
+            self.from_source_button.setEnabled(False)
+            self.threshbox.setEnabled(False)
+        else:
+            self.pksbtn.setEnabled(True)
+            self.guessbtn.setEnabled(True)
+            self.from_source_button.setEnabled(True)
+            self.pksbtn.setEnabled(True)
+            self.threshbox.setEnabled(True)
+
+        # IMAGE + POINTS FUNCS
+        if self.active_image.currentText() == '' or self.active_points.currentText() == '':
+            self.p2lbtn.setEnabled(False)
+        else:
+            self.p2lbtn.setEnabled(True)
+        
+        # LABEL FUNCS
+        if self.active_label.currentText() == '':
+            self.labcheck.setEnabled(False)
+            self.l2pbtn.setEnabled(False)
+            self.addbtn.setEnabled(False)
+            self.removebtn.setEnabled(False)
+            self.labelbox.setEnabled(False)
+        else:
+            self.labcheck.setEnabled(True)
+            self.l2pbtn.setEnabled(True)
+            self.addbtn.setEnabled(True)
+            self.removebtn.setEnabled(True)
+            self.labelbox.setEnabled(True)
+
+        # LABEL + POINTS FUNCS
+        if self.active_label.currentText() == '' or self.active_points.currentText() == '':
+            self.selectLabelsbtn.setEnabled(False)
+        else:
+            self.selectLabelsbtn.setEnabled(True)
+
+        # SAVE FUNCS
+        if self.active_image.currentText() == '' and self.active_label.currentText() == '':
+            self.save3Dbtn.setEnabled(False)
+        else:
+            self.save3Dbtn.setEnabled(True)
+        return 
 
     def update_layer_choices(self, event=None):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
@@ -254,6 +303,7 @@ class GTWidget(QWidget):
         else:
             self.active_merge_label.setEnabled(True)
             self.mlsbtn.setEnabled(True)
+        
         merge_label_choice = self.active_merge_label.currentText()
         
         for combo in (self.active_image, self.active_points, self.active_label, self.active_merge_label):
@@ -400,11 +450,11 @@ class GTWidget(QWidget):
 
     def setup_save_box(self):
         box6 = QGroupBox('Save zarr')
-        save3Dbtn = QPushButton("Save zarr")
+        self.save3Dbtn = QPushButton("Save zarr")
         #save23Dbtn = QPushButton("Save 2D and 3D")
         browse_dir_button = QPushButton("\uD83D\uDCC1"); browse_dir_button.setToolTip("Browse for directory")
         browse_zarr_button = QPushButton("\uD83D\uDD0D"); browse_zarr_button.setToolTip("Find existing zarr")
-        from_source_button = QPushButton("from source"); from_source_button.setToolTip("Select location from raw source");
+        self.from_source_button = QPushButton("from source"); self.from_source_button.setToolTip("Select location from raw source");
         
         self.file_path_input = QLineEdit(self)
         self.file_name_input = QLineEdit(self)
@@ -413,9 +463,9 @@ class GTWidget(QWidget):
         browse_zarr_button.clicked.connect(self._browse_for_zarr)
         self.file_name_input.editingFinished.connect(self._ensure_zarr_extension)
         self.file_path_input.textChanged.connect(self._update_completer)
-        save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=False, twoD=False))
+        self.save3Dbtn.clicked.connect(lambda: self._save_zarr(threeD=False, twoD=False))
         #save23Dbtn.clicked.connect(lambda: self._save_zarr(threeD=True, twoD=True))
-        from_source_button.clicked.connect(self._path_from_raw_source)
+        self.from_source_button.clicked.connect(self._path_from_raw_source)
 
         box6.setLayout(QVBoxLayout())
         box6a = QGroupBox('File path'); box6a.setLayout(QHBoxLayout())
@@ -426,8 +476,8 @@ class GTWidget(QWidget):
         box6b.layout().addWidget(self.file_name_input)
         box6b.layout().addWidget(browse_zarr_button)
         box6.layout().addWidget(box6b)        
-        box6.layout().addWidget(from_source_button)
-        box6.layout().addWidget(save3Dbtn)
+        box6.layout().addWidget(self.from_source_button)
+        box6.layout().addWidget(self.save3Dbtn)
         #box6.layout().addWidget(save23Dbtn, 3, 1, 1, 1)
 
         #self.layout().addWidget(box1)
