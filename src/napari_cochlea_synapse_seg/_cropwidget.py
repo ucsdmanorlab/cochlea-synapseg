@@ -1,15 +1,16 @@
-import os
-from qtpy.QtWidgets import QGridLayout, QFileDialog,QDoubleSpinBox, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
 import numpy as np
-from skimage.measure import regionprops
-from skimage.filters import threshold_otsu
 import os
+import matplotlib.pyplot as plt
+
+from qtpy.QtWidgets import QGridLayout, QFileDialog,QDoubleSpinBox, QCheckBox, QWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QHBoxLayout, QGroupBox
 from tifffile import imwrite
-from skimage.restoration import rolling_ball
+
 from skimage.filters import threshold_yen, threshold_li, threshold_otsu
+from skimage.measure import regionprops
+from skimage.restoration import rolling_ball
 from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
-import matplotlib.pyplot as plt
+
 
 class CropWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
@@ -151,7 +152,6 @@ class CropWidget(QWidget):
         img1_choice = self.img1_combo.currentText()
         img2_choice = self.img2_combo.currentText()
         if event and str(event.type) == 'removed' and str(event.value) == img2_choice:
-            #print(f"Removed layer {img2_choice}, resetting post-synaptic labels")
             setattr(self, 'post_syn_labels', None)
         labels_choice = self.labels_combo.currentText()
 
@@ -196,8 +196,8 @@ class CropWidget(QWidget):
                self.sigzbox.value() == self.post_syn_labels['sig_z'] and \
                self.threshbox.currentText() == self.post_syn_labels['thresh'] and \
                self.img2_combo.currentText() == self.post_syn_labels['img']:
-                print("Using cached post-synaptic labels")
-                return self.post_syn_labels['labels']
+               print("Using cached post-synaptic labels")
+               return self.post_syn_labels['labels']
         try:
             post_syn_layer = self.viewer.layers[self.img2_combo.currentText()]
         except KeyError:
@@ -286,6 +286,23 @@ class CropWidget(QWidget):
             return save_dir if save_dir else None
         return None
 
+    def make_grid(self, crops, nrows, ncols, crop_shape):
+            grid = np.zeros(
+                (crop_shape[0], nrows * crop_shape[1], ncols * crop_shape[2]),
+                dtype=crops[0].dtype
+            )
+            cents = []
+            for idx, crop in enumerate(crops):
+                row = idx // ncols
+                col = idx % ncols
+                grid[
+                    :,
+                    row * crop_shape[1]:(row + 1) * crop_shape[1],
+                    col * crop_shape[2]:(col + 1) * crop_shape[2]
+                ] = crop
+                cents.append([crop_shape[0]/2, row * crop_shape[1] + crop_shape[1] // 2, col * crop_shape[2] + crop_shape[2] // 2])
+            return grid, cents
+    
     def create_montage(self):
         # Get save directory if checkbox is checked
         save_dir = self.get_save_directory()
@@ -322,19 +339,9 @@ class CropWidget(QWidget):
             crops2.append(crop2)
 
             post_syn_strict = np.any(img2_labels[labels==prop.label])
-            # crop_mask = img2_labels[z0:z1, y0:y1, x0:x1]
-            # # Check if the crop contains any post-synaptic signal
-            # if np.any(crop_mask):
-            #     post_syn.append(True)
-            # else:
-            #     post_syn.append(False)
+            
             post_syn.append(post_syn_strict)
-            # blobs = blob_dog(crop2, min_sigma=1, max_sigma=5, threshold=0.01)
-            # if blobs.size > 0:
-            #     post_syn.append(True)
-            # else:
-            #     post_syn.append(False)
-
+            
             # sort by the selected property
             if self.sort_combo.currentText() == "Label ID":
                 sortby.append(prop.label)
@@ -346,9 +353,9 @@ class CropWidget(QWidget):
                 sortby.append(z)
             elif self.sort_combo.currentText() == "Size":
                 sortby.append(prop.area)
-            elif self.sort_combo.currentText() == "Layer 1 Intensity":
+            elif self.sort_combo.currentText() == "Presynaptic Intensity":
                 sortby.append(np.mean(crop1))
-            elif self.sort_combo.currentText() == "Layer 2 Intensity":
+            elif self.sort_combo.currentText() == "Postsynaptic Intensity":
                 sortby.append(np.mean(crop2))
             ids.append(prop.label)
         
@@ -374,6 +381,7 @@ class CropWidget(QWidget):
         crops2 = [pad_crop(c, target_shape) for c in crops2]
         # Sort by area:
         sorted_indices = np.argsort(sortby)
+
         if self.sort_combo.currentText() in ["Size", "Layer 1 Intensity", "Layer 2 Intensity"]:
             sorted_indices = sorted_indices[::-1]
         crops1 = [crops1[i] for i in sorted_indices]
@@ -396,26 +404,9 @@ class CropWidget(QWidget):
 
         nrows = int(np.ceil(np.sqrt(n)))
         ncols = int(np.ceil(n / nrows))
-        
-        def make_grid(crops, nrows, ncols, crop_shape):
-            grid = np.zeros(
-                (crop_shape[0], nrows * crop_shape[1], ncols * crop_shape[2]),
-                dtype=crops[0].dtype
-            )
-            cents = []
-            for idx, crop in enumerate(crops):
-                row = idx // ncols
-                col = idx % ncols
-                grid[
-                    :,
-                    row * crop_shape[1]:(row + 1) * crop_shape[1],
-                    col * crop_shape[2]:(col + 1) * crop_shape[2]
-                ] = crop
-                cents.append([crop_shape[0]/2, row * crop_shape[1] + crop_shape[1] // 2, col * crop_shape[2] + crop_shape[2] // 2])
-            return grid, cents
 
-        montage1, cents = make_grid(crops1, nrows, ncols, target_shape)
-        montage2, _ = make_grid(crops2, nrows, ncols, target_shape)
+        montage1, cents = self.make_grid(crops1, nrows, ncols, target_shape)
+        montage2, _ = self.make_grid(crops2, nrows, ncols, target_shape)
         
         for layer in self.viewer.layers:
             if layer.name.startswith("Montage"):
