@@ -199,12 +199,12 @@ class PredWidget(QWidget):
                 self.model_path_input.text(),
                 self.zarr_path_input.text(),
                 f'raw') 
-    
+
         zarrfi = zarr.open(self.zarr_path_input.text())
-        
+        zarr_res = zarrfi['raw'].attrs.get('resolution', [1,]*3)
         zarrfi['pred'] = pred
         zarrfi['pred'].attrs['offset'] = [0,]*3
-        zarrfi['pred'].attrs['resolution'] = [1,]*3
+        zarrfi['pred'].attrs['resolution'] = zarr_res
 
         show_info("Prediction complete.")
     

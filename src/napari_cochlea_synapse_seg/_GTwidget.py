@@ -136,7 +136,7 @@ class GTWidget(QWidget):
         self.max_rad_z = 1
         self.blur_sig_xy = 0.5
         self.blur_sig_z = 0.2
-        self.solidity_thresh = 0.8
+        self.solidity_thresh = 0.6
         self.threshold = 0.5
 
         box5b = QGroupBox('Advanced settings')
@@ -569,30 +569,12 @@ class GTWidget(QWidget):
             except:
                 is_dask=False
 
-            if threeD:
-                if is_dask:
-                    zarrfi[os.path.join('3d', f'{name}')] = data.compute()
-                else:
-                    zarrfi[os.path.join('3d', f'{name}')] = data
-                zarrfi[os.path.join('3d', f'{name}')].attrs['offset'] = [0,]*3
-                zarrfi[os.path.join('3d', f'{name}')].attrs['resolution'] = [1,]*3
-            
-            if twoD:
-                for z in range(data.shape[0]):
-                    if is_dask:
-                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0).compute()
-                    else:
-                        zarrfi[os.path.join('2d',f'{name}', str(z))] = np.expand_dims(data[z], axis=0)
-                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['offset'] = [0,]*2
-                    zarrfi[os.path.join('2d',f'{name}', str(z))].attrs['resolution'] = [1,]*2
-            
-            if not threeD and not twoD:
-                if is_dask:
-                    zarrfi[f'{name}'] = process_func(data.compute())
-                else:
-                    zarrfi[f'{name}'] = process_func(data)
-                zarrfi[f'{name}'].attrs['offset'] = [0,]*3
-                zarrfi[f'{name}'].attrs['resolution'] = [1,]*3
+            if is_dask:
+                zarrfi[f'{name}'] = process_func(data.compute())
+            else:
+                zarrfi[f'{name}'] = process_func(data)
+            zarrfi[f'{name}'].attrs['offset'] = [0,]*3
+            zarrfi[f'{name}'].attrs['resolution'] = [self.zres*1000, self.xyres*1000, self.xyres*1000] # saved in nm
             show_info(f'Saved {name} to {self.file_name_input.text()}')
 
     def _process_raw(self, rawdata):
@@ -887,8 +869,6 @@ class GTWidget(QWidget):
                 name='points from '+self.active_label.currentText())
             
     def _points2labels(self):
-        # TODO: add in auto-update of combos if points2labels function breaks due to missing layer information
-
         should_break=False
         try:
             pts = self.viewer.layers[self.active_points.currentText()].data
@@ -915,6 +895,7 @@ class GTWidget(QWidget):
             return
         
         blur_sig = [self.blur_sig_z, self.blur_sig_xy, self.blur_sig_xy]
+        
         if np.any(blur_sig):
             img_inv = gaussian_filter(np.min(img) + np.max(img) - img, blur_sig)
         else:
