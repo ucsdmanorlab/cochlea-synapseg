@@ -4,7 +4,7 @@ It includes various functionalities to display synapse images, edit and create p
 label annotations, interconvert between points and labels, and save data in as .zarr.
 """
 from typing import TYPE_CHECKING
-from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter
+from qtpy.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QVBoxLayout, QGridLayout, QPushButton, QWidget, QFileDialog, QComboBox, QLineEdit, QCompleter, QCheckBox
 from scipy.ndimage import gaussian_filter
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops_table
@@ -15,6 +15,7 @@ from napari.utils.notifications import show_info, show_error
 
 from ._widget_utils import _setup_spin 
 from ._predict import predict
+from .utils.post_proc import sdt_to_labels
 import os
 import numpy as np
 import zarr
@@ -41,10 +42,10 @@ class PredWidget(QWidget):
 
         pred_btn = QPushButton('Predict')
         pred_btn.clicked.connect(self._predict); 
-        show_btn = QPushButton('Show')
-        show_btn.clicked.connect(self._show_pred)
-        prednshow_btn = QPushButton('Predict and Show')
-        prednshow_btn.clicked.connect(lambda: [self._predict(), self._show_pred()])
+        self.show_pred_check = QCheckBox('Show SDT prediction after predict')
+        self.show_pred_check.setChecked(False)
+        self.show_label_check = QCheckBox('Show labels after predict')
+        self.show_pred_check.setChecked(False)
 
         # Set default model path to ctbp2_sdt_3d_model in this package
         default_model_path = os.path.join(os.path.dirname(__file__), "ctbp2_sdt_3d_model")
@@ -76,8 +77,8 @@ class PredWidget(QWidget):
         # box.layout().addWidget(self.input_image, 1, 1)
         # box.layout().addWidget(img_refreshbtn, 1, 2)
         box.layout().addWidget(pred_btn)#, 2, 0, 1, 3)
-        box.layout().addWidget(show_btn)
-        box.layout().addWidget(prednshow_btn)
+        box.layout().addWidget(self.show_pred_check)
+        box.layout().addWidget(self.show_label_check)
         self.layout().addWidget(box)
 
     def setup_pred2label_box(self):
@@ -207,6 +208,25 @@ class PredWidget(QWidget):
         zarrfi['pred'].attrs['resolution'] = zarr_res
 
         show_info("Prediction complete.")
+
+        labels = sdt_to_labels(pred, 
+                  peak_thresh=self.peak_thresh,
+                  mask_thresh=self.mask_thresh,
+                  strict_peak_thresh=True,
+                  blur_sig=[self.sig_z, self.sig_xy, self.sig_xy],
+                  size_filt=self.size_filt)
+        zarrfi['pred_labels'] = labels
+        zarrfi['pred_labels'].attrs['offset'] = [0,]*3
+        zarrfi['pred_labels'].attrs['resolution'] = zarr_res
+
+        if self.show_pred_check.isChecked() or self.show_label_check.isChecked():
+            zarrfi = zarr.open(self.zarr_path_input.text())
+            self.viewer.add_image(zarrfi['raw'], name='input', contrast_limits=[0, 65535])
+        if self.show_pred_check.isChecked():
+            zarrfi = zarr.open(self.zarr_path_input.text())
+            self.viewer.add_image(zarrfi['pred'], name='SDT prediction', contrast_limits=[0,1])
+        if self.show_label_check.isChecked():
+            self.viewer.add_labels(labels, name='labels from prediction')
     
     def _show_pred(self):
         zarrfi = zarr.open(self.zarr_path_input.text())
@@ -218,8 +238,6 @@ class PredWidget(QWidget):
         if model_file[0]:
             self.model_path_input.setText(model_file[0])
 
-    
-        
     def _browse_for_path(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
