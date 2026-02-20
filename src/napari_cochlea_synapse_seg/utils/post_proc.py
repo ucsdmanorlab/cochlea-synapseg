@@ -53,13 +53,14 @@ def sdt_to_labels(pred,
                   mask_thresh=0.0,
                   strict_peak_thresh=True,
                   blur_sig=[0.5, 0.7, 0.7],
-                  size_filt=None):
+                  size_filt=None,
+                  min_dist=2):
     dist_map = gaussian_filter(pred, blur_sig) 
     coords = peak_local_max(
             dist_map, 
             footprint=np.ones((3, 3, 3)), 
             threshold_abs=peak_thresh, 
-            min_distance=2,
+            min_distance=min_dist,
             )
     markers = np.zeros(dist_map.shape, dtype=bool)
     markers[tuple(coords.T)] = True

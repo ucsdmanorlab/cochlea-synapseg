@@ -83,7 +83,7 @@ class PredWidget(QWidget):
 
     def setup_pred2label_box(self):
         self.mask_thresh = 0.0
-        self.peak_thresh = 0.1
+        self.peak_thresh = 0.2
         self.min_distance = 2
         self.sig_xy = 0.7
         self.sig_z = 0.5
@@ -105,7 +105,7 @@ class PredWidget(QWidget):
         show_peaks_btn = QPushButton('Show peaks')
 
         settings_btn = QPushButton('Advanced settings'); settings_btn.setCheckable(True)
-        settings_box = QGroupBox('Settings')
+        settings_box = QGroupBox('Label settings')
         settings_box.setVisible(False)
         settings_btn.toggled.connect(settings_box.setVisible)
         
@@ -114,27 +114,27 @@ class PredWidget(QWidget):
         size_filt_box = QSpinBox()
         min_dist_box = QSpinBox()
 
-        pred2label_btn = QPushButton('Prediction to labels')
+        pred2label_btn = QPushButton('Relabel prediction')
         
         _setup_spin(self, mask_thresh_box,  minval=-1, maxval=1, val=self.mask_thresh, step=0.05, attrname='mask_thresh', dec=2, dtype=float)
         _setup_spin(self, peak_thresh_box,  minval=-1, maxval=1, val=self.peak_thresh, step=0.05, attrname='peak_thresh', dec=2, dtype=float)
-        _setup_spin(self, sig_xy_box, minval=0, val=self.sig_xy, step=0.05, attrname='sig_xy', dec=2, dtype=float)
-        _setup_spin(self, sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float)
-        _setup_spin(self, size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int)
-        _setup_spin(self, min_dist_box, minval=0, maxval=1000, val=self.min_distance, step=1, attrname='min_distance', dtype=int)
+        _setup_spin(self, sig_xy_box, minval=0, val=self.sig_xy, step=0.05, attrname='sig_xy', dec=2, dtype=float, suff=' px')
+        _setup_spin(self, sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float, suff=' px')
+        _setup_spin(self, size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int, suff=' px')
+        _setup_spin(self, min_dist_box, minval=0, maxval=1000, val=self.min_distance, step=1, attrname='min_distance', dtype=int, suff=' px')
 
         show_mask_btn.clicked.connect(lambda: self.viewer.add_image(self.viewer.layers[self.active_image.currentText()].data>self.mask_thresh, name='mask - '+str(self.mask_thresh)))
         show_peaks_btn.clicked.connect(lambda: self.viewer.add_points((self._get_peaks()), name='peaks - '+str(self.peak_thresh), size=5))
         pred2label_btn.clicked.connect(self._pred2labels); 
         
         settings_box.setLayout(QGridLayout())
-        settings_box.layout().addWidget(QLabel('sigma xy:'), 0, 0)
+        settings_box.layout().addWidget(QLabel('Gaussian σ xy:'), 0, 0)
         settings_box.layout().addWidget(sig_xy_box, 0, 1)
-        settings_box.layout().addWidget(QLabel('sigma z:'), 1, 0)
+        settings_box.layout().addWidget(QLabel('Gaussian σ z:'), 1, 0)
         settings_box.layout().addWidget(sig_z_box, 1, 1)
-        settings_box.layout().addWidget(QLabel('size filter:'), 2, 0)
+        settings_box.layout().addWidget(QLabel('Minimum size:'), 2, 0)
         settings_box.layout().addWidget(size_filt_box, 2, 1)
-        settings_box.layout().addWidget(QLabel('min distance:'), 3, 0)
+        settings_box.layout().addWidget(QLabel('Minimum distance:'), 3, 0)
         settings_box.layout().addWidget(min_dist_box, 3, 1)
 
         p2l_gbox = QGridLayout()
@@ -214,7 +214,8 @@ class PredWidget(QWidget):
                   mask_thresh=self.mask_thresh,
                   strict_peak_thresh=True,
                   blur_sig=[self.sig_z, self.sig_xy, self.sig_xy],
-                  size_filt=self.size_filt)
+                  size_filt=self.size_filt,
+                  min_dist=self.min_distance)
         zarrfi['pred_labels'] = labels
         zarrfi['pred_labels'].attrs['offset'] = [0,]*3
         zarrfi['pred_labels'].attrs['resolution'] = zarr_res
@@ -302,9 +303,10 @@ class PredWidget(QWidget):
                     min_distance=self.min_distance,
                     )
         return coords
+    
     def _pred2labels(self):
         try:
-            img_layer = self.viewer.layers[self.active_image.currentText()]
+            img_layer = self.viewer.layers[self.active_image.currentText()] # add option to read from zarr instead?
         except:
             show_error("Prediction layer not defined. Labels cannot be calculated.")
             return
