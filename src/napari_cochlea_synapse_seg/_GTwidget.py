@@ -656,10 +656,18 @@ class GTWidget(QWidget):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
             self.xyres = x
             self.zres = z
+        if imgpath is not None and '.zarr' in imgpath:
+            [z, y, x] = self._read_zarr_voxel_size(imgpath)
+            self.xyres = x
+            self.zres = z
 
         self.img_shape = img.data.shape
         # TODO: add functionality for .czi or other formats?
-        
+    
+    def _read_zarr_voxel_size(self, file_path):
+        res = zarr.open(file_path, mode='r').attrs.get('resolution', [1., 1., 1.])
+        return res
+
     def _read_tiff_voxel_size(self, file_path):
         """
         Implemented based on information found in https://pypi.org/project/tifffile
