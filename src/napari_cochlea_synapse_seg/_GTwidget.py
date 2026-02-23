@@ -511,12 +511,23 @@ class GTWidget(QWidget):
             self.file_name_input.setCompleter(completer)
     def _set_z_scale(self):
         if self.z_scale.isChecked():
+            try:
+                self.viewer.layers.events.inserted.disconnect(self.scale_layers)
+            except (TypeError, RuntimeError):
+                pass
             self.viewer.layers.events.inserted.connect(self.scale_layers)
+            try:
+                self.viewer.layers.events.removed.disconnect(self.scale_layers)
+            except (TypeError, RuntimeError):
+                pass
             self.viewer.layers.events.removed.connect(self.scale_layers)
             self.scale_layers()
         else:
-            self.viewer.layers.events.inserted.disconnect(self.scale_layers)
-            self.viewer.layers.events.removed.disconnect(self.scale_layers)
+            try:
+                self.viewer.layers.events.inserted.disconnect(self.scale_layers)
+                self.viewer.layers.events.removed.disconnect(self.scale_layers)
+            except (TypeError, RuntimeError):
+                pass
             for layer in self.viewer.layers:
                 layer.scale = [1, 1, 1]
 
@@ -722,14 +733,32 @@ class GTWidget(QWidget):
         self.viewer.layers[self.active_points.currentText()].refresh()
 
     def _connect_label_events(self):
-        try:
-            layer_name = self.active_label.currentText()
-            if layer_name:
-                self.viewer.layers[layer_name].events.labels_update.connect(self._set_max_label)
-                self.viewer.layers[layer_name].events.selected_label.connect(self.labelbox.setValue)
+        layer_name = self.active_label.currentText()
+        if layer_name:
+            try:
+                self.viewer.layers[layer_name].events.labels_update.disconnect(self._set_max_label)
+                self.viewer.layers[layer_name].events.selected_label.disconnect(self._on_selected_label)
+            except:
+                pass
+            self.viewer.layers[layer_name].events.labels_update.connect(self._set_max_label)
+            self.viewer.layers[layer_name].events.selected_label.connect(self._on_selected_label)
 
-        except:
-            pass
+    def _on_selected_label(self, event):
+        value = None
+        if event is not None and hasattr(event, "value"):
+            try:
+                value = int(event.value)
+            except (TypeError, ValueError):
+                value = None
+        if value is None:
+            layer_name = self.active_label.currentText()
+            if layer_name and layer_name in self.viewer.layers:
+                try:
+                    value = int(self.viewer.layers[layer_name].selected_label)
+                except (TypeError, ValueError):
+                    value = None
+        if value is not None:
+            self.labelbox.setValue(value)
 
     def _set_max_label(self):
         should_break=False
