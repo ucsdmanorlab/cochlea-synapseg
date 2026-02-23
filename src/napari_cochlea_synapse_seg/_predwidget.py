@@ -404,4 +404,8 @@ class PredWidget(QWidget):
         elif img_choice == '' and len(img_layers) > 0:
             self.active_image.setCurrentText(img_layers[-1]) # default to most recent layer
         for layer in self.viewer.layers:
+            try:
+                layer.events.name.disconnect(self.update_layer_choices)
+            except (TypeError, RuntimeError, ValueError):
+                pass
             layer.events.name.connect(self.update_layer_choices)
