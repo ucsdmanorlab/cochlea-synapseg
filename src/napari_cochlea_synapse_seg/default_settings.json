@@ -3,6 +3,7 @@
   "GTWidget": {
     "z_scale": false,
     "thresh": 10000,
+    "snap_to_max": true,
     "snap_rad": 3,
     "rad_xy": 6,
     "rad_z": 4,
@@ -18,6 +19,8 @@
   "PredWidget": {
     "model_path_input": "/Users/caylamiller/workspace/cochlea-synapseg/src/napari_cochlea_synapse_seg/ctbp2_sdt_3d_model",
     "zarr_path_input": "",
+    "show_SDT": false,
+    "show_labels": false,
     "mask_thresh": 0.0,
     "peak_thresh": 0.2,
     "min_distance": 2,
@@ -26,12 +29,18 @@
     "size_filt": 0
   },
   "CropWidget": {
+    "save_presyn_props": true,
+    "create_montage": false,
     "crop_size_xy": 12,
     "crop_size_z": 6,
     "sort_by": "Label ID",
     "save_montage_to_disk": true,
     "save_crops_to_disk": false,
-    "montage_zoom": 2
+    "montage_zoom": 2,
+    "bk_rad": 5,
+    "sig_xy": 2.0,
+    "sig_z": 1.0,
+    "post_thresh_type": "Otsu"
   },
   "PreProcessWidget": {}
 }

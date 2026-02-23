@@ -354,6 +354,8 @@ class PredWidget(QWidget):
         return {
             'model_path_input': self.model_path_input.text(),
             'zarr_path_input': self.zarr_path_input.text(),
+            'show_SDT': self.show_pred_check.isChecked(),
+            'show_labels': self.show_label_check.isChecked(),
             'mask_thresh': self.mask_thresh,
             'peak_thresh': self.peak_thresh,
             'min_distance': self.min_distance,
@@ -373,6 +375,10 @@ class PredWidget(QWidget):
             self.model_path_input.setText(settings['model_path_input'])
         if 'zarr_path_input' in settings:
             self.zarr_path_input.setText(settings['zarr_path_input'])
+        if 'show_SDT' in settings:
+            self.show_pred_check.setChecked(settings['show_SDT'])
+        if 'show_labels' in settings:
+            self.show_label_check.setChecked(settings['show_labels'])
         if 'mask_thresh' in settings:
             self.mask_thresh = settings['mask_thresh']
             self.mask_thresh_box.setValue(settings['mask_thresh'])
