@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "GTWidget": {
+    "z_scale": false,
+    "thresh": 10000,
+    "snap_rad": 3,
+    "rad_xy": 6,
+    "rad_z": 4,
+    "max_rad_xy": 1,
+    "max_rad_z": 1,
+    "blur_sig_xy": 0.5,
+    "blur_sig_z": 0.2,
+    "solidity_thresh": 0.6,
+    "threshold": 0.5,
+    "wshed_type": "Image",
+    "file_path_input": ""
+  },
+  "PredWidget": {
+    "model_path_input": "/Users/caylamiller/workspace/cochlea-synapseg/src/napari_cochlea_synapse_seg/ctbp2_sdt_3d_model",
+    "zarr_path_input": "",
+    "mask_thresh": 0.0,
+    "peak_thresh": 0.2,
+    "min_distance": 2,
+    "sig_xy": 0.7,
+    "sig_z": 0.5,
+    "size_filt": 0
+  },
+  "CropWidget": {
+    "crop_size_xy": 12,
+    "crop_size_z": 6,
+    "sort_by": "Label ID",
+    "save_montage_to_disk": true,
+    "save_crops_to_disk": false,
+    "montage_zoom": 2
+  },
+  "PreProcessWidget": {}
+}

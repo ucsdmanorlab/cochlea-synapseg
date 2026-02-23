@@ -46,10 +46,6 @@ class GTWidget(QWidget):
         # self.viewer.layers.events.removed.connect(self._rescan_layers, position="last")
 
     def setup_image_box(self):
-        self.xyres = 1
-        self.zres = 1
-        self.img_shape = None
-
         self.active_image = QComboBox()        
         box2 = QGroupBox('Image tools')
         _limitStretch(self.active_image)
@@ -59,8 +55,8 @@ class GTWidget(QWidget):
 
         self.z_scale = QCheckBox("Scale z-dimension")
 
-        _setup_spin(self, self.xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
-        _setup_spin(self, self.zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
+        _setup_spin(self, self.xyresbox,  minval=0, val=1, step=0.05, attrname='xyres', dec=4, dtype=float)
+        _setup_spin(self, self.zresbox,  minval=0, val=1, step=0.05, attrname='zres', dec=4, dtype=float)
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
         self.active_image.currentTextChanged.connect(lambda: self.xyresbox.setValue(self.xyres))
         self.active_image.currentTextChanged.connect(lambda: self.zresbox.setValue(self.zres))
@@ -94,18 +90,17 @@ class GTWidget(QWidget):
         box3 = QGroupBox('Points tools')
         ptsbtn = QPushButton("New points layer")
         self.pksbtn = QPushButton("Find peaks above:")
-        self.threshbox = QSpinBox(); self.thresh=10000
+        self.threshbox = QSpinBox(); 
         self.guessbtn = QPushButton("Guess")
 
-        snap_check = QCheckBox("Snap to max"); self.snap_to_max = True; snap_check.setChecked(self.snap_to_max)
-        snapbox = QSpinBox(); self.snap_rad = 3
-        _setup_spin(self, snapbox,   minval=0, suff=' px', val=self.snap_rad, attrname='snap_rad')
+        self.snapcheck = QCheckBox("Snap to max"); self.snap_to_max = True; self.snapcheck.setChecked(self.snap_to_max)
+        self.snapbox = QSpinBox(); 
+        _setup_spin(self, self.snapbox,   minval=0, suff=' px', val=3, attrname='snap_rad')
         
-        snap_check.stateChanged.connect(lambda state: snapbox.setEnabled(state==2))
-        snap_check.stateChanged.connect(lambda state: setattr(self, 'snap_to_max', state==2))
+        self.snapcheck.stateChanged.connect(lambda state: self.snapbox.setEnabled(state==2))
+        self.snapcheck.stateChanged.connect(lambda state: setattr(self, 'snap_to_max', state==2))
         
-
-        _setup_spin(self, self.threshbox, minval=0, maxval=65535, val=self.thresh, attrname='thresh')
+        _setup_spin(self, self.threshbox, minval=0, maxval=65535, val=10000, attrname='thresh')
         ptsbtn.clicked.connect(self._new_pts)
         self.pksbtn.clicked.connect(self._find_peaks)
         self.guessbtn.clicked.connect(self._calc_pk_thresh)
@@ -118,8 +113,8 @@ class GTWidget(QWidget):
         pks_gbox.addWidget(self.guessbtn)
         points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
         points_gbox.addWidget(ptsbtn, 5, 0, 1, 2)
-        points_gbox.addWidget(snap_check, 6, 0, 1, 1)
-        points_gbox.addWidget(snapbox, 6, 1, 1, 1)
+        points_gbox.addWidget(self.snapcheck, 6, 0, 1, 1)
+        points_gbox.addWidget(self.snapbox, 6, 1, 1, 1)
 
         box3.setLayout(points_gbox)
 
@@ -130,37 +125,28 @@ class GTWidget(QWidget):
         advbtn = QPushButton("Advanced settings"); advbtn.setCheckable(True)
                 
         # Advanced settings
-        self.rad_xy = 6
-        self.rad_z = 4
-        self.max_rad_xy = 1
-        self.max_rad_z = 1
-        self.blur_sig_xy = 0.5
-        self.blur_sig_z = 0.2
-        self.solidity_thresh = 0.6
-        self.threshold = 0.5
-
         box5b = QGroupBox('Advanced settings')
-        radxybox = QSpinBox(); 
-        radzbox = QSpinBox(); 
-        mradxybox = QSpinBox() ; 
-        mradzbox = QSpinBox(); 
-        sigxybox = QDoubleSpinBox(); 
-        sigzbox = QDoubleSpinBox(); 
-        solidbox = QDoubleSpinBox();
-        threshbox = QDoubleSpinBox();
-        wshedcombo = QComboBox();
+        self.radxybox = QSpinBox(); 
+        self.radzbox = QSpinBox(); 
+        self.mradxybox = QSpinBox() ; 
+        self.mradzbox = QSpinBox(); 
+        self.sigxybox = QDoubleSpinBox(); 
+        self.sigzbox = QDoubleSpinBox(); 
+        self.solidbox = QDoubleSpinBox();
+        self.thresholdbox = QDoubleSpinBox();
+        self.wshedcombo = QComboBox();
         self.wshed_type = 'Image'
 
-        _setup_spin(self, radxybox,  minval=1, suff=' px', val=self.rad_xy, attrname='rad_xy')
-        _setup_spin(self, radzbox,   minval=0, suff=' px', val=self.rad_z, attrname='rad_z')
-        _setup_spin(self, mradxybox, minval=0, suff=' px', val=self.max_rad_xy, attrname='max_rad_xy')
-        _setup_spin(self, mradzbox,  minval=0, suff=' px', val=self.max_rad_z, attrname='max_rad_z')
-        _setup_spin(self, sigxybox,  minval=0, suff=' px', val=self.blur_sig_xy, step=0.1, attrname='blur_sig_xy', dtype=float)
-        _setup_spin(self, sigzbox,   minval=0, suff=' px', val=self.blur_sig_z, step=0.1, attrname='blur_sig_z', dtype=float)
-        _setup_spin(self, solidbox,  minval=0, maxval=1, val=self.solidity_thresh, step=0.05, attrname='solidity_thresh', dtype=float)
-        _setup_spin(self, threshbox,  minval=0, maxval=1, val=self.threshold, step=0.05, attrname='threshold', dtype=float)
-        wshedcombo.addItem('Image'); wshedcombo.addItem('Distance')
-        wshedcombo.currentTextChanged.connect(lambda name: setattr(self, 'wshed_type', name))
+        _setup_spin(self, self.radxybox,  minval=1, suff=' px', val=6, attrname='rad_xy')
+        _setup_spin(self, self.radzbox,   minval=0, suff=' px', val=4, attrname='rad_z')
+        _setup_spin(self, self.mradxybox, minval=0, suff=' px', val=1, attrname='max_rad_xy')
+        _setup_spin(self, self.mradzbox,  minval=0, suff=' px', val=1, attrname='max_rad_z')
+        _setup_spin(self, self.sigxybox,  minval=0, suff=' px', val=0.5, step=0.1, attrname='blur_sig_xy', dtype=float)
+        _setup_spin(self, self.sigzbox,   minval=0, suff=' px', val=0.2, step=0.1, attrname='blur_sig_z', dtype=float)
+        _setup_spin(self, self.solidbox,  minval=0, maxval=1, val=0.6, step=0.05, attrname='solidity_thresh', dtype=float)
+        _setup_spin(self, self.thresholdbox,  minval=0, maxval=1, val=0.5, step=0.05, attrname='threshold', dtype=float)
+        self.wshedcombo.addItem('Image'); self.wshedcombo.addItem('Distance')
+        self.wshedcombo.currentTextChanged.connect(lambda name: setattr(self, 'wshed_type', name))
 
         
         self.p2lbtn.clicked.connect(self._points2labels)
@@ -169,25 +155,18 @@ class GTWidget(QWidget):
         advbtn.toggled.connect(box5b.setVisible)
         
         gbox5b = QGridLayout()
-        gbox5b.addWidget(QLabel('threshold:'), 0, 0); gbox5b.addWidget(threshbox, 0, 1)
-        gbox5b.addWidget(QLabel('segment xy rad:'), 1, 0); gbox5b.addWidget(radxybox, 1, 1)
-        gbox5b.addWidget(QLabel('segment z rad:'), 2, 0); gbox5b.addWidget(radzbox, 2, 1)
-        # gbox5b.addWidget(QLabel('snap to max rad:'), 2, 0); gbox5b.addWidget(snapbox, 2, 1)
-        gbox5b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox5b.addWidget(mradxybox, 3, 1)
-        gbox5b.addWidget(QLabel('local max z rad:'), 4, 0); gbox5b.addWidget(mradzbox, 4, 1)
-        gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(sigxybox, 5, 1)
-        gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(sigzbox, 6, 1)
-        gbox5b.addWidget(QLabel('solidity:'), 7, 0); gbox5b.addWidget(solidbox, 7, 1)
-        gbox5b.addWidget(QLabel('watershed type:'), 8, 0); gbox5b.addWidget(wshedcombo, 8, 1)
+        gbox5b.addWidget(QLabel('threshold:'), 0, 0); gbox5b.addWidget(self.thresholdbox, 0, 1)
+        gbox5b.addWidget(QLabel('segment xy rad:'), 1, 0); gbox5b.addWidget(self.radxybox, 1, 1)
+        gbox5b.addWidget(QLabel('segment z rad:'), 2, 0); gbox5b.addWidget(self.radzbox, 2, 1)
+        gbox5b.addWidget(QLabel('local max xy rad:'), 3, 0); gbox5b.addWidget(self.mradxybox, 3, 1)
+        gbox5b.addWidget(QLabel('local max z rad:'), 4, 0); gbox5b.addWidget(self.mradzbox, 4, 1)
+        gbox5b.addWidget(QLabel('gaussian xy rad:'), 5, 0); gbox5b.addWidget(self.sigxybox, 5, 1)
+        gbox5b.addWidget(QLabel('gaussian z rad:'), 6, 0); gbox5b.addWidget(self.sigzbox, 6, 1)
+        gbox5b.addWidget(QLabel('solidity:'), 7, 0); gbox5b.addWidget(self.solidbox, 7, 1)
+        gbox5b.addWidget(QLabel('watershed type:'), 8, 0); gbox5b.addWidget(self.wshedcombo, 8, 1)
         box5b.setLayout(gbox5b)
 
         p2l_gbox = QGridLayout()
-        #p2l_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
-        # p2l_gbox.addWidget(rxybtn, 1, 0)
-        # p2l_gbox.addWidget(p2mbtn, 1, 1)
-        # p2l_gbox.addWidget(QLabel('manually edit z:'), 2, 0)
-        # p2l_gbox.addWidget(zbox, 2, 1)
-        # p2l_gbox.addWidget(snapbtn, 3, 0, 1, 2)  
         p2l_gbox.addWidget(self.p2lbtn, 4, 0, 1, 2)  
         p2l_gbox.addWidget(advbtn, 5, 0, 1, 2)
         p2l_gbox.addWidget(box5b, 6, 0, 1, 2)
@@ -206,7 +185,7 @@ class GTWidget(QWidget):
         self.labcheck.setTristate(False); self.labcheck.setCheckState(False)
         self.labcheck.stateChanged.connect(self._set_editable)
         self.active_label.currentTextChanged.connect(self._set_editable)
-        self.labelbox = QSpinBox(); self.rem_label = 1
+        self.labelbox = QSpinBox(); 
         self.addbtn = QPushButton("New label")
         self.addbtn.clicked.connect(self._add_label)
         self.removebtn = QPushButton("Remove label")
@@ -225,7 +204,7 @@ class GTWidget(QWidget):
         self.removebtn.clicked.connect(self._remove_label)
         self.l2pbtn.clicked.connect(self._labels2points)
         self.selectLabelsbtn.clicked.connect(self._remove_labels_wo_points)
-        _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=self.rem_label, attrname='rem_label')
+        _setup_spin(self, self.labelbox, minval=1, maxval=1000, val=1, attrname='rem_label')
 
         labels_gbox = QGridLayout()
         labels_gbox.addWidget(QLabel('labels layer:'), 0, 0) ; labels_gbox.addWidget(self.active_label, 0, 1)
@@ -324,6 +303,11 @@ class GTWidget(QWidget):
             self.active_merge_label.setCurrentText(merge_label_choice)
 
         for layer in self.viewer.layers:
+            # disconnect first:
+            try:
+                layer.events.name.disconnect(self.update_layer_choices)
+            except (TypeError, RuntimeError, ValueError):
+                pass
             layer.events.name.connect(self.update_layer_choices)
 
     def _add_label(self):
@@ -661,7 +645,6 @@ class GTWidget(QWidget):
             self.xyres = x
             self.zres = z
 
-        self.img_shape = img.data.shape
         # TODO: add functionality for .czi or other formats?
     
     def _read_zarr_voxel_size(self, file_path):
@@ -990,20 +973,33 @@ class GTWidget(QWidget):
 
 
     def _get_slices(self, rad_xy, rad_z, loc, shape):
-        x1 = max(loc[2] - rad_xy, 0) ; 
-        x2 = min(loc[2] + rad_xy+1, shape[2]) ; 
-        y1 = max(loc[1] - rad_xy, 0) ; 
-        y2 = min(loc[1] + rad_xy+1, shape[1]) ; 
-        z1 = max(loc[0] - rad_z, 0) ; 
-        z2 = min(loc[0] + rad_z+1, shape[0]) ;
-        relx = loc[2] - x1 ;
-        rely = loc[1] - y1 ;
-        relz = loc[0] - z1 ;
+        '''
+        Get slices for a box around loc with specified radii, staying 
+        within shape bounds. 
+        '''
+        x1 = max(loc[2] - rad_xy, 0) 
+        x2 = min(loc[2] + rad_xy+1, shape[2]) 
+        y1 = max(loc[1] - rad_xy, 0) 
+        y2 = min(loc[1] + rad_xy+1, shape[1]) 
+        z1 = max(loc[0] - rad_z, 0) 
+        z2 = min(loc[0] + rad_z+1, shape[0]) 
+        relx = loc[2] - x1 
+        rely = loc[1] - y1 
+        relz = loc[0] - z1 
         
         return slice(z1,z2), slice(y1,y2), slice(x1,x2), [relz, rely, relx]
     
     def _dist_watershed_sep(self, mask, loc):
-        dists = distance_transform_edt(mask, sampling=[3,1,1])
+        """
+        Watershed separation based on distance transform. After separation, 
+        returns the mask region overlapping with location loc.
+            mask : 3D binary mask 
+            loc : (z, y, x) coordinates of location to keep 
+        Returns:
+            mask_out: 3D binary mask 
+        """
+        sampling = [self.z_res/self.xy_res, 1, 1]
+        dists = distance_transform_edt(mask, sampling=sampling)
         pk_idx = peak_local_max(dists, labels=mask)
         pks = np.zeros_like(dists, dtype=bool)
         for pk in pk_idx:
@@ -1027,7 +1023,87 @@ class GTWidget(QWidget):
         return mask_out
 
 
+    def to_settings(self):
+        """
+        Serialize current widget settings to a dictionary.
+        
+        Returns:
+            Dictionary of all persistent settings.
+        """
+        return {
+            'z_scale': self.z_scale.isChecked(),
+            'thresh': self.thresh,
+            'snap_to_max': self.snap_to_max,
+            'snap_rad': self.snap_rad,
+            'rad_xy': self.rad_xy,
+            'rad_z': self.rad_z,
+            'max_rad_xy': self.max_rad_xy,
+            'max_rad_z': self.max_rad_z,
+            'blur_sig_xy': self.blur_sig_xy,
+            'blur_sig_z': self.blur_sig_z,
+            'solidity_thresh': self.solidity_thresh,
+            'threshold': self.threshold,
+            'wshed_type': self.wshed_type,
+            'file_path_input': self.file_path_input.text()
+        }
+    
+    def apply_settings(self, settings):
+        """
+        Restore widget settings from a dictionary.
+        
+        Args:
+            settings: Dictionary of settings to apply.
+        """
+        if 'z_scale' in settings:
+            self.z_scale.setChecked(settings['z_scale'])
+        if 'thresh' in settings:
+            self.thresh = settings['thresh']
+            self.threshbox.setValue(self.thresh)
+        if 'snap_to_max' in settings:
+            self.snap_to_max = settings['snap_to_max']
+            self.snapcheck.setChecked(self.snap_to_max)
+        if 'snap_rad' in settings:
+            self.snap_rad = settings['snap_rad']
+            self.snapbox.setValue(self.snap_rad)
+        if 'rad_xy' in settings:
+            self.rad_xy = settings['rad_xy']
+            self.radxybox.setValue(settings['rad_xy'])
+        if 'rad_z' in settings:
+            self.rad_z = settings['rad_z']
+            self.radzbox.setValue(settings['rad_z'])
+        if 'max_rad_xy' in settings:
+            self.max_rad_xy = settings['max_rad_xy']
+            self.mradxybox.setValue(settings['max_rad_xy'])
+        if 'max_rad_z' in settings:
+            self.max_rad_z = settings['max_rad_z']
+            self.mradzbox.setValue(settings['max_rad_z'])
+        if 'blur_sig_xy' in settings:
+            self.blur_sig_xy = settings['blur_sig_xy']
+            self.sigxybox.setValue(settings['blur_sig_xy'])
+        if 'blur_sig_z' in settings:
+            self.blur_sig_z = settings['blur_sig_z']
+            self.sigzbox.setValue(settings['blur_sig_z'])
+        if 'solidity_thresh' in settings:
+            self.solidity_thresh = settings['solidity_thresh']
+            self.solidbox.setValue(settings['solidity_thresh'])
+        if 'threshold' in settings:
+            self.threshold = settings['threshold']
+            self.thresholdbox.setValue(settings['threshold'])
+        if 'wshed_type' in settings:
+            self.wshed_type = settings['wshed_type']
+            idx = self.wshedcombo.findText(settings['wshed_type'])
+            if idx >= 0:
+                self.wshedcombo.setCurrentIndex(idx)
+        if 'file_path_input' in settings:
+            self.file_path_input.setText(settings['file_path_input'])
+
+
 def normalize(data, maxval=1., dtype=np.uint16):
+    '''
+    Min-max data normalization to range [0, maxval].
+    Returns:
+        Normalized data as numpy array of type dtype.
+    '''
     data = data.astype(dtype)
     data_norm = data - data.min()
     scale_fact = maxval/data_norm.max()

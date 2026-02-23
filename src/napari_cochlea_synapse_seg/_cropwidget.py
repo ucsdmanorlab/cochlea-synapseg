@@ -10,37 +10,40 @@ from skimage.measure import regionprops
 from skimage.restoration import rolling_ball
 from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
+from .utils.post_proc import fit_line_length_in_box
+from ._widget_utils import _setup_spin
 
 
 class CropWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
-        self.montage_zoom = 2  # Default zoom level for montage
         self.post_syn_labels = None
 
         layout = QVBoxLayout()
 
-        #
-        renumber_btn = QPushButton("Renumber labels")
-        renumber_btn.clicked.connect(self._renumber_labels)
-        layout.addWidget(renumber_btn)
+        layers_box = QGroupBox('Layers')
+        layers_layout = QGridLayout()
+
 
         # Layer selectors
         self.img1_combo = QComboBox()
         self.img2_combo = QComboBox()
         self.labels_combo = QComboBox()
-        layout.addWidget(QLabel("Presynaptic Image:"))
-        layout.addWidget(self.img1_combo)
-        layout.addWidget(QLabel("Postsynaptic Image:"))
-        layout.addWidget(self.img2_combo)
-        layout.addWidget(QLabel("Presynaptic labels Layer:"))
-        layout.addWidget(self.labels_combo)
+        renumber_btn = QPushButton("Renumber labels")
+        renumber_btn.clicked.connect(self._renumber_labels)
         post_settings_btn = QPushButton("Post-synaptic detection options")
         post_settings_btn.setCheckable(True)
-        layout.addWidget(post_settings_btn)        
-        #self.img2_combo.currentTextChanged.connect(lambda: setattr(self, 'post_syn_labels', None))
-
+        
+        layers_layout.addWidget(QLabel("Presynaptic Labels:"), 0, 0)
+        layers_layout.addWidget(self.labels_combo, 0, 1)
+        layers_layout.addWidget(renumber_btn, 1, 0, 1, 2)
+        layers_layout.addWidget(QLabel("Presynaptic Image:"), 2, 0)
+        layers_layout.addWidget(self.img1_combo, 2, 1)
+        layers_layout.addWidget(QLabel("Postsynaptic Image:"), 3, 0)
+        layers_layout.addWidget(self.img2_combo, 3, 1)
+        layers_layout.addWidget(post_settings_btn, 4, 0, 1, 2)
+        
         #############                
         # Advanced settings
 
@@ -62,63 +65,72 @@ class CropWidget(QWidget):
         gbox_postsyn.addWidget(QLabel('gaussian z rad:'), 2, 0); gbox_postsyn.addWidget(self.sigzbox, 2, 1)
         gbox_postsyn.addWidget(self.threshbox, 3, 0); gbox_postsyn.addWidget(show_thresh, 3, 1)
         postSynBox.setLayout(gbox_postsyn)
-        layout.addWidget(postSynBox)
+        layers_layout.addWidget(postSynBox, 5, 0, 1, 2)
+
+        layers_box.setLayout(layers_layout)
+        layout.addWidget(layers_box)
         ##############
 
         # Crop size
-        crop_layout = QHBoxLayout()
-        crop_layout.addWidget(QLabel("Crop size:"))
+        self.presyn_check = QCheckBox("Save presynaptic properties")
+        self.montage_check = QCheckBox("Create montage")
+        analysis_checks_layout = QHBoxLayout()
+        analysis_checks_layout.addWidget(self.presyn_check)
+        analysis_checks_layout.addWidget(self.montage_check)
+        layout.addLayout(analysis_checks_layout)
+        montage_settings_box = QGroupBox('Montage settings')
+        montage_settings_box.setVisible(False)
+        self.montage_check.toggled.connect(montage_settings_box.setVisible)
+        
+        montage_settings_layout = QGridLayout()
+        montage_settings_layout.addWidget(QLabel("Crop size:"), 0, 0)
         self.crop_size_spin = QSpinBox()
         self.crop_size_spin.setMinimum(5)
         self.crop_size_spin.setMaximum(512)
         self.crop_size_spin.setValue(16)
-        crop_layout.addWidget(self.crop_size_spin)
-        layout.addLayout(crop_layout)
-
-        crop_z_layout = QHBoxLayout()
+        montage_settings_layout.addWidget(self.crop_size_spin, 0, 1)
+        
         self.crop_size_z_spin = QSpinBox()
         self.crop_size_z_spin.setMinimum(1)
         self.crop_size_z_spin.setMaximum(512)
         self.crop_size_z_spin.setValue(8)
-        crop_z_layout.addWidget(QLabel("Crop size (Z):"))
-        crop_z_layout.addWidget(self.crop_size_z_spin)
-        layout.addLayout(crop_z_layout)
+        montage_settings_layout.addWidget(QLabel("Crop size (Z):"), 1, 0)
+        montage_settings_layout.addWidget(self.crop_size_z_spin, 1, 1)
 
-        sort_layout = QHBoxLayout()
-        sort_layout.addWidget(QLabel("Sort by:"))
+        montage_settings_layout.addWidget(QLabel("Sort by:"), 2, 0)
         self.sort_combo = QComboBox()
         self.sort_combo.addItems(["Label ID", "Size", "X", "Y", "Z", "Presynaptic Intensity", "Postsynaptic Intensity"])
-        sort_layout.addWidget(self.sort_combo)
-        layout.addLayout(sort_layout)
-        # add save checkbox:
-        save_layout = QHBoxLayout()
+        montage_settings_layout.addWidget(self.sort_combo, 2, 1)
+
         self.save_check = QCheckBox("Save crops to disk")
         self.save_check.setChecked(False)
         self.save_montage_check = QCheckBox("Save montage to disk")
-        self.save_montage_check.setChecked(False)
-        save_layout.addWidget(self.save_check)
-        save_layout.addWidget(self.save_montage_check)
-        layout.addLayout(save_layout)
+        self.save_montage_check.setChecked(True)
+        montage_settings_layout.addWidget(self.save_check, 3, 0)
+        montage_settings_layout.addWidget(self.save_montage_check, 3, 1)
+        montage_settings_box.setLayout(montage_settings_layout)
+        layout.addWidget(montage_settings_box)
+
+        # add save checkbox:
         self.save_dir = os.path.expanduser("~")
         
-        self.crop_btn = QPushButton("Create Montage")
+        self.crop_btn = QPushButton("Analyze")
         layout.addWidget(self.crop_btn)
 
         # add zoom to label functionality:
-        zoom_box = QGroupBox('Zoom to label')
+        self.zoom_box = QGroupBox('Montage controls')
+        self.zoom_box.setVisible(False)
         self.label_id = QSpinBox()
         self.label_id.setMinimum(1)
         self.label_id.setMaximum(1000000)
         self.label_id.setValue(1)
         self.zoom_to_label_btn = QPushButton("Zoom to Label")
         self.zoom_to_montage_btn = QPushButton("Zoom to Montage")
-        zoom_spin = QDoubleSpinBox()
-        zoom_spin.setMinimum(0)
-        zoom_spin.setMaximum(1000)
-        zoom_spin.setValue(self.montage_zoom)
-        zoom_spin.valueChanged[float].connect(lambda value: setattr(self, 'montage_zoom', value))
+
+        self.zoom_spin = QDoubleSpinBox()
+        _setup_spin(self, self.zoom_spin, minval=0, maxval=1000, val=2, attrname='montage_zoom', dtype=float)
         zoom_current = QPushButton("Current")
-        zoom_current.clicked.connect(lambda: zoom_spin.setValue(self.viewer.camera.zoom))
+        zoom_current.clicked.connect(lambda: self.zoom_spin.setValue(self.viewer.camera.zoom))
         
         zoom_box_layout = QVBoxLayout()
         labels_layout = QHBoxLayout()
@@ -128,12 +140,12 @@ class CropWidget(QWidget):
         zoom_box_layout.addWidget(self.zoom_to_label_btn)
         montage_zoom_layout = QHBoxLayout()
         montage_zoom_layout.addWidget(QLabel("Montage Zoom:"))
-        montage_zoom_layout.addWidget(zoom_spin)
+        montage_zoom_layout.addWidget(self.zoom_spin)
         montage_zoom_layout.addWidget(zoom_current)
         zoom_box_layout.addLayout(montage_zoom_layout)
         zoom_box_layout.addWidget(self.zoom_to_montage_btn)
-        zoom_box.setLayout(zoom_box_layout)
-        layout.addWidget(zoom_box)
+        self.zoom_box.setLayout(zoom_box_layout)
+        layout.addWidget(self.zoom_box)
 
         self.setLayout(layout)
 
@@ -141,7 +153,7 @@ class CropWidget(QWidget):
         self.viewer.layers.events.inserted.connect(self.update_layer_choices)
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
 
-        self.crop_btn.clicked.connect(self.create_montage)
+        self.crop_btn.clicked.connect(self._analyze)
         self.zoom_to_label_btn.clicked.connect(self.zoom_to_label)
         self.zoom_to_montage_btn.clicked.connect(self.zoom_to_montage)
 
@@ -170,6 +182,16 @@ class CropWidget(QWidget):
         for layer in self.viewer.layers:
             layer.events.name.connect(self.update_layer_choices)
 
+    def _analyze(self):
+        save_dir = self.get_save_directory()
+        if ((self.montage_check.isChecked() and (self.save_check.isChecked() or self.save_montage_check.isChecked())) or self.presyn_check.isChecked()) and not save_dir:
+            return
+        if self.montage_check.isChecked():
+            self.create_montage()
+            self.zoom_box.setVisible(True)
+        if self.presyn_check.isChecked():
+            self._pre_syn_props()
+
     def _renumber_labels(self):
         labels_layer = self.viewer.layers[self.labels_combo.currentText()]
         labels_data = labels_layer.data
@@ -179,6 +201,71 @@ class CropWidget(QWidget):
             new_labels[labels_data == prop.label] = new_label
         labels_layer.data = new_labels
         self.post_syn_labels = None
+
+    def _pre_syn_props(self):
+        import pandas as pd
+        from skimage.measure import regionprops_table
+
+        # ADD CHECK TO CALCULATE IMAGE MEANS
+        # ADD POSTSYN FUNCTIONALITY
+
+        try:
+            pre_syn_labels = self.viewer.layers[self.labels_combo.currentText()].data
+            ctbp2 = self.viewer.layers[self.img1_combo.currentText()]
+            ctbp2_data = ctbp2.data
+            glur2_data = self.viewer.layers[self.img2_combo.currentText()].data
+            pixel_size = ctbp2.scale if ctbp2.scale is not None else [1.0, 1.0, 1.0]
+            if hasattr(pre_syn_labels, 'compute'):
+                pre_syn_labels = pre_syn_labels.compute()
+            if hasattr(ctbp2_data, 'compute'):
+                ctbp2_data = ctbp2_data.compute()
+        except KeyError:
+            return
+        syn_vol = regionprops(pre_syn_labels, intensity_image=ctbp2_data, spacing=pixel_size)
+        avg_syn_volume = np.mean([s.area for s in syn_vol])
+        avg_syn_intensity = np.mean([s.mean_intensity for s in syn_vol])
+        syn_stats = regionprops_table(pre_syn_labels, intensity_image=ctbp2_data, spacing=pixel_size,
+                                properties=['label', 'area', 'intensity_min', 'intensity_max', 'intensity_mean',
+                                            'centroid', 'centroid_weighted', 'equivalent_diameter_area', 
+                                            'axis_major_length', 'axis_minor_length', 'solidity'])
+        syn_stats_df = pd.DataFrame(syn_stats)
+        
+        # post_syn = []
+        # post_syn_int = []
+        # for label_id in syn_stats['label']:
+        #     if label_id == 0:
+        #         continue
+        #     post_syn_strict = np.any(post_syn_labels[pre_syn_labels==label_id])
+        #     post_syn.append(post_syn_strict)
+
+        #     row = syn_stats_df.loc[syn_stats_df['label'] == label_id, ['centroid-0', 'centroid-1', 'centroid-2']].iloc[0]
+        #     z, y, x = row['centroid-0'], row['centroid-1'], row['centroid-2']
+
+        #     centroid_px = (int(z/pixel_size[0]), int(y/pixel_size[1]), int(x/pixel_size[2]))
+        #     local_crop = glur2_data[
+        #         max(0, centroid_px[0]-2):centroid_px[0]+3,
+        #         max(0, centroid_px[1]-4):centroid_px[1]+5,
+        #         max(0, centroid_px[2]-4):centroid_px[2]+5
+        #     ]
+        #     post_syn_int.append(np.mean(local_crop))
+
+        outfi = os.path.join(self.save_dir, f'pre_syn_stats.csv')
+        syn_stats_df.to_csv(outfi, index=False)
+    
+        syn_stats_px = regionprops(pre_syn_labels)
+        centroids_px = [syn_stat_px.centroid for syn_stat_px in syn_stats_px]
+
+        line_length_um = fit_line_length_in_box(
+            centroids=centroids_px,
+            volume_shape=pre_syn_labels.shape,
+            voxel_size=pixel_size,
+        )
+
+        if line_length_um is None or line_length_um == 0:
+            ribbons_per_um = None
+        else:
+            ribbons_per_um = len(centroids_px) / line_length_um
+        return
 
     def _show_post_syn_detection(self):
         labels = self._calc_post_syn_detection()
@@ -275,7 +362,7 @@ class CropWidget(QWidget):
                 montage_on = True            
         
     def get_save_directory(self):
-        if self.save_check.isChecked() or self.save_montage_check.isChecked():
+        if ((self.montage_check.isChecked() and (self.save_check.isChecked() or self.save_montage_check.isChecked())) or self.presyn_check.isChecked()):
             save_dir = QFileDialog.getExistingDirectory(
                 self, 
                 "Select Directory to Save Outputs",
@@ -304,9 +391,7 @@ class CropWidget(QWidget):
             return grid, cents
     
     def create_montage(self):
-        # Get save directory if checkbox is checked
-        save_dir = self.get_save_directory()
-        if (self.save_check.isChecked() or self.save_montage_check.isChecked()) and not save_dir:
+        if (self.save_check.isChecked() or self.save_montage_check.isChecked()) and not self.save_dir:
             return  # User cancelled directory selection
         
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
@@ -463,3 +548,42 @@ class CropWidget(QWidget):
                 plt.text(cent[2], cent[1]+target_shape[1]//2-1, str(id), color=color, fontsize=12, ha='center', va='center')
             plt.tight_layout()
             plt.savefig(filename)
+    
+    def to_settings(self):
+        """
+        Serialize current widget settings to a dictionary.
+        
+        Returns:
+            Dictionary of all persistent settings.
+        """
+        return {
+            'crop_size_xy': self.crop_size_spin.value(),
+            'crop_size_z': self.crop_size_z_spin.value(),
+            'sort_by': self.sort_combo.currentText(),
+            'save_montage_to_disk': self.save_montage_check.isChecked(),
+            'save_crops_to_disk': self.save_check.isChecked(),
+            'montage_zoom': self.montage_zoom
+        }
+    
+    def apply_settings(self, settings):
+        """
+        Restore widget settings from a dictionary.
+        
+        Args:
+            settings: Dictionary of settings to apply.
+        """
+        if 'crop_size_xy' in settings:
+            self.crop_size_spin.setValue(settings['crop_size_xy'])
+        if 'crop_size_z' in settings:
+            self.crop_size_z_spin.setValue(settings['crop_size_z'])
+        if 'sort_by' in settings:
+            idx = self.sort_combo.findText(settings['sort_by'])
+            if idx >= 0:
+                self.sort_combo.setCurrentIndex(idx)
+        if 'save_montage_to_disk' in settings:
+            self.save_montage_check.setChecked(settings['save_montage_to_disk'])
+        if 'save_crops_to_disk' in settings:
+            self.save_check.setChecked(settings['save_crops_to_disk'])
+        if 'montage_zoom' in settings:
+            self.montage_zoom = settings['montage_zoom']
+            self.zoom_spin.setValue(self.montage_zoom)

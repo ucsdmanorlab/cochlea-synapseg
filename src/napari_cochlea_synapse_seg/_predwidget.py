@@ -99,9 +99,9 @@ class PredWidget(QWidget):
 
         box2 = QGroupBox('Labels from prediction')
         
-        mask_thresh_box = QDoubleSpinBox()
+        self.mask_thresh_box = QDoubleSpinBox()
         show_mask_btn = QPushButton('Show mask')
-        peak_thresh_box  = QDoubleSpinBox()
+        self.peak_thresh_box  = QDoubleSpinBox()
         show_peaks_btn = QPushButton('Show peaks')
 
         settings_btn = QPushButton('Advanced settings'); settings_btn.setCheckable(True)
@@ -109,19 +109,19 @@ class PredWidget(QWidget):
         settings_box.setVisible(False)
         settings_btn.toggled.connect(settings_box.setVisible)
         
-        sig_xy_box = QDoubleSpinBox()
-        sig_z_box = QDoubleSpinBox()
-        size_filt_box = QSpinBox()
-        min_dist_box = QSpinBox()
+        self.sig_xy_box = QDoubleSpinBox()
+        self.sig_z_box = QDoubleSpinBox()
+        self.size_filt_box = QSpinBox()
+        self.min_dist_box = QSpinBox()
 
         pred2label_btn = QPushButton('Relabel prediction')
         
-        _setup_spin(self, mask_thresh_box,  minval=-1, maxval=1, val=self.mask_thresh, step=0.05, attrname='mask_thresh', dec=2, dtype=float)
-        _setup_spin(self, peak_thresh_box,  minval=-1, maxval=1, val=self.peak_thresh, step=0.05, attrname='peak_thresh', dec=2, dtype=float)
-        _setup_spin(self, sig_xy_box, minval=0, val=self.sig_xy, step=0.05, attrname='sig_xy', dec=2, dtype=float, suff=' px')
-        _setup_spin(self, sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float, suff=' px')
-        _setup_spin(self, size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int, suff=' px')
-        _setup_spin(self, min_dist_box, minval=0, maxval=1000, val=self.min_distance, step=1, attrname='min_distance', dtype=int, suff=' px')
+        _setup_spin(self, self.mask_thresh_box,  minval=-1, maxval=1, val=self.mask_thresh, step=0.05, attrname='mask_thresh', dec=2, dtype=float)
+        _setup_spin(self, self.peak_thresh_box,  minval=-1, maxval=1, val=self.peak_thresh, step=0.05, attrname='peak_thresh', dec=2, dtype=float)
+        _setup_spin(self, self.sig_xy_box, minval=0, val=self.sig_xy, step=0.05, attrname='sig_xy', dec=2, dtype=float, suff=' px')
+        _setup_spin(self, self.sig_z_box, minval=0, val=self.sig_z, step=0.05, attrname='sig_z', dec=2, dtype=float, suff=' px')
+        _setup_spin(self, self.size_filt_box, minval=0, maxval=1000, val=self.size_filt, step=1, attrname='size_filt', dtype=int, suff=' px')
+        _setup_spin(self, self.min_dist_box, minval=0, maxval=1000, val=self.min_distance, step=1, attrname='min_distance', dtype=int, suff=' px')
 
         show_mask_btn.clicked.connect(lambda: self.viewer.add_image(self.viewer.layers[self.active_image.currentText()].data>self.mask_thresh, name='mask - '+str(self.mask_thresh)))
         show_peaks_btn.clicked.connect(lambda: self.viewer.add_points((self._get_peaks()), name='peaks - '+str(self.peak_thresh), size=5))
@@ -129,21 +129,21 @@ class PredWidget(QWidget):
         
         settings_box.setLayout(QGridLayout())
         settings_box.layout().addWidget(QLabel('Gaussian σ xy:'), 0, 0)
-        settings_box.layout().addWidget(sig_xy_box, 0, 1)
+        settings_box.layout().addWidget(self.sig_xy_box, 0, 1)
         settings_box.layout().addWidget(QLabel('Gaussian σ z:'), 1, 0)
-        settings_box.layout().addWidget(sig_z_box, 1, 1)
+        settings_box.layout().addWidget(self.sig_z_box, 1, 1)
         settings_box.layout().addWidget(QLabel('Minimum size:'), 2, 0)
-        settings_box.layout().addWidget(size_filt_box, 2, 1)
+        settings_box.layout().addWidget(self.size_filt_box, 2, 1)
         settings_box.layout().addWidget(QLabel('Minimum distance:'), 3, 0)
-        settings_box.layout().addWidget(min_dist_box, 3, 1)
+        settings_box.layout().addWidget(self.min_dist_box, 3, 1)
 
         p2l_gbox = QGridLayout()
         p2l_gbox.addWidget(QLabel('pred layer:'), 0, 0) ; p2l_gbox.addWidget(self.active_image, 0,  1, 1, 2)
         p2l_gbox.addWidget(QLabel('mask threshold:'), 1, 0) 
-        p2l_gbox.addWidget(mask_thresh_box, 1, 1)
+        p2l_gbox.addWidget(self.mask_thresh_box, 1, 1)
         p2l_gbox.addWidget(show_mask_btn, 1, 2)
         p2l_gbox.addWidget(QLabel('peak threshold:'), 2, 0)
-        p2l_gbox.addWidget(peak_thresh_box, 2, 1)
+        p2l_gbox.addWidget(self.peak_thresh_box, 2, 1)
         p2l_gbox.addWidget(show_peaks_btn, 2, 2)
         p2l_gbox.addWidget(settings_btn, 3, 0, 1, 3)
         p2l_gbox.addWidget(settings_box, 4, 0, 1, 3) #QLabel('sigma xy:'), 3, 0)
@@ -343,6 +343,55 @@ class PredWidget(QWidget):
             self.viewer.add_labels(segmentation_filt, name='labels from '+self.active_image.currentText()+', '+str(self.size_filt))
         else:
             self.viewer.add_labels(segmentation, name='labels from '+self.active_image.currentText())
+    
+    def to_settings(self):
+        """
+        Serialize current widget settings to a dictionary.
+        
+        Returns:
+            Dictionary of all persistent settings.
+        """
+        return {
+            'model_path_input': self.model_path_input.text(),
+            'zarr_path_input': self.zarr_path_input.text(),
+            'mask_thresh': self.mask_thresh,
+            'peak_thresh': self.peak_thresh,
+            'min_distance': self.min_distance,
+            'sig_xy': self.sig_xy,
+            'sig_z': self.sig_z,
+            'size_filt': self.size_filt
+        }
+    
+    def apply_settings(self, settings):
+        """
+        Restore widget settings from a dictionary.
+        
+        Args:
+            settings: Dictionary of settings to apply.
+        """
+        if 'model_path_input' in settings:
+            self.model_path_input.setText(settings['model_path_input'])
+        if 'zarr_path_input' in settings:
+            self.zarr_path_input.setText(settings['zarr_path_input'])
+        if 'mask_thresh' in settings:
+            self.mask_thresh = settings['mask_thresh']
+            self.mask_thresh_box.setValue(settings['mask_thresh'])
+        if 'peak_thresh' in settings:
+            self.peak_thresh = settings['peak_thresh']
+            self.peak_thresh_box.setValue(settings['peak_thresh'])
+        if 'min_distance' in settings:
+            self.min_distance = settings['min_distance']
+            self.min_dist_box.setValue(settings['min_distance'])
+        if 'sig_xy' in settings:
+            self.sig_xy = settings['sig_xy']
+            self.sig_xy_box.setValue(settings['sig_xy'])
+        if 'sig_z' in settings:
+            self.sig_z = settings['sig_z']
+            self.sig_z_box.setValue(settings['sig_z'])
+        if 'size_filt' in settings:
+            self.size_filt = settings['size_filt']
+            self.size_filt_box.setValue(settings['size_filt'])
+
     def update_layer_choices(self, event=None):
         img_layers = [l.name for l in self.viewer.layers if l.__class__.__name__ == "Image"]
 

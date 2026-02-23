@@ -106,3 +106,56 @@ def bksub_threshold(img, type='yen'):
     labels = watershed(-img_filt, mask=img_map)
 
     return labels
+
+def fit_line_length_in_box(centroids, volume_shape, voxel_size):
+        centroids = np.asarray(centroids, dtype=float)
+        if centroids.ndim != 2 or centroids.shape[0] < 2 or centroids.shape[1] != 3:
+            return None
+
+        center = centroids.mean(axis=0)
+        centroids = centroids - center
+        _, _, vh = np.linalg.svd(centroids, full_matrices=False)
+        direction = vh[0]
+        norm = np.linalg.norm(direction)
+        if norm == 0:
+            return None
+        direction = direction / norm
+        print(direction, flush=True)
+
+        zyx = np.asarray(volume_shape, dtype=float)
+
+        t_mins = []
+        t_maxs = []
+        
+        for i in range(3):
+            if np.abs(direction[i]) < 1e-10:
+                # direction nearly parallel to this axis; line doesn't constrain t
+                t_mins.append(-np.inf)
+                t_maxs.append(np.inf)
+            else:
+                # solve: center[i] + t * direction[i] = bound
+                t_at_min = (0 - center[i]) / direction[i]
+                t_at_max = (zyx[i] - 1 - center[i]) / direction[i]
+                t_mins.append(min(t_at_min, t_at_max))
+                t_maxs.append(max(t_at_min, t_at_max))
+        
+        t_enter = max(t_mins)
+        t_exit = min(t_maxs)
+        
+        if t_enter > t_exit:
+            # line doesn't intersect box
+            return None
+        
+        # intersection points
+        p_enter = center + t_enter * direction
+        p_exit = center + t_exit * direction
+        
+        # length in pixels (direction is normalized, so |t_exit - t_enter| is pixel length)
+        length_px = t_exit - t_enter
+        
+        # convert to physical units: scale direction by voxel_size and compute length
+        voxel_size_arr = np.asarray(voxel_size, dtype=float)
+        direction_scaled = direction * voxel_size_arr
+        length_um = length_px * np.linalg.norm(direction_scaled)
+        
+        return length_um
