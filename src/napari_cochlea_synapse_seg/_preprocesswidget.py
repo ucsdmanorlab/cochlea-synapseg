@@ -16,7 +16,7 @@ from napari.utils.notifications import show_info, show_error
 if TYPE_CHECKING:
     import napari
                 
-class PreProcessWidget(QWidget):
+class PreprocessWidget(QWidget):
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
