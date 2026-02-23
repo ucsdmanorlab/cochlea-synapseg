@@ -49,8 +49,8 @@ class CropWidget(QWidget):
 
         postSynBox = QGroupBox('Post-synaptic detection options')
         self.bkradbox = QSpinBox(); _setup_spin(self, self.bkradbox, minval=1, maxval=20, val=5, suff=' px')
-        self.sigxybox = QDoubleSpinBox(); _setup_spin(self, self.sigxybox, minval=0, maxval=10, val=2.0, suff=' px', step=0.1, type=float)
-        self.sigzbox = QDoubleSpinBox(); _setup_spin(self, self.sigzbox, minval=0, maxval=10, val=1.0, suff=' px', step=0.2, type=float)
+        self.sigxybox = QDoubleSpinBox(); _setup_spin(self, self.sigxybox, minval=0, maxval=10, val=2.0, suff=' px', step=0.1, dtype=float)
+        self.sigzbox = QDoubleSpinBox(); _setup_spin(self, self.sigzbox, minval=0, maxval=10, val=1.0, suff=' px', step=0.2, dtype=float)
         self.threshbox = QComboBox(); self.threshbox.addItem('Yen'); self.threshbox.addItem('Otsu'); self.threshbox.addItem('Li'); self.threshbox.setCurrentText('Yen')
         show_thresh = QPushButton('Show post-synaptic detection')
         show_thresh.clicked.connect(self._show_post_syn_detection)
@@ -560,16 +560,18 @@ class CropWidget(QWidget):
             Dictionary of all persistent settings.
         """
         return {
+            'save_presyn_props': self.presyn_check.isChecked(),
+            'create_montage': self.montage_check.isChecked(),
             'crop_size_xy': self.crop_size_spin.value(),
             'crop_size_z': self.crop_size_z_spin.value(),
-            'post_thresh_type': self.threshbox.currentText(),
-            'bk_rad': self.bkradbox.value(),
-            'sig_xy': self.sigxybox.value(),
-            'sig_z': self.sigzbox.value(),
             'sort_by': self.sort_combo.currentText(),
             'save_montage_to_disk': self.save_montage_check.isChecked(),
             'save_crops_to_disk': self.save_check.isChecked(),
             'montage_zoom': self.montage_zoom,
+            'bk_rad': self.bkradbox.value(),
+            'sig_xy': self.sigxybox.value(),
+            'sig_z': self.sigzbox.value(),
+            'post_thresh_type': self.threshbox.currentText(),
         }
     
     def apply_settings(self, settings):
@@ -579,6 +581,10 @@ class CropWidget(QWidget):
         Args:
             settings: Dictionary of settings to apply.
         """
+        if 'save_presyn_props' in settings:
+            self.presyn_check.setChecked(settings['save_presyn_props'])
+        if 'create_montage' in settings:
+            self.montage_check.setChecked(settings['create_montage'])
         if 'crop_size_xy' in settings:
             self.crop_size_spin.setValue(settings['crop_size_xy'])
         if 'crop_size_z' in settings:
@@ -594,13 +600,13 @@ class CropWidget(QWidget):
         if 'montage_zoom' in settings:
             self.montage_zoom = settings['montage_zoom']
             self.zoom_spin.setValue(self.montage_zoom)
-        if 'post_thresh_type' in settings:
-            idx = self.threshbox.findText(settings['post_thresh_type'])
-            if idx >= 0:
-                self.threshbox.setCurrentIndex(idx)
         if 'bk_rad' in settings:
             self.bkradbox.setValue(settings['bk_rad'])
         if 'sig_xy' in settings:
             self.sigxybox.setValue(settings['sig_xy'])
         if 'sig_z' in settings:
             self.sigzbox.setValue(settings['sig_z'])
+        if 'post_thresh_type' in settings:
+            idx = self.threshbox.findText(settings['post_thresh_type'])
+            if idx >= 0:
+                self.threshbox.setCurrentIndex(idx)
