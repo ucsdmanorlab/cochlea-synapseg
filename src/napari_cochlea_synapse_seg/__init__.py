@@ -2,7 +2,7 @@ __version__ = "0.0.1"
 
 from ._reader import napari_get_reader
 from ._sample_data import make_sample_data, make_sample_data_with_noise, make_sample_data_pairs
-from ._widget import SynapSegWidget
+from ._MainWidget import SynapSegWidget
 #from ._writer import write_multiple, write_single_image
 
 __all__ = (
