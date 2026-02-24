@@ -13,7 +13,7 @@ from napari.utils.notifications import show_info, show_error
 
 from ._GTWidget import GTWidget
 from ._PredWidget import PredWidget
-from ._PreprocessWidget import PreprocessWidget
+from ._PreprocessWidget import PreProcessWidget
 from ._AnalyzeWidget import AnalyzeWidget
 from ._settings import load_settings, save_settings
 
@@ -44,7 +44,7 @@ class SynapSegWidget(QWidget):
         self.preprocess_widget = PreProcessWidget(viewer=self.viewer)
         self.gt_widget = GTWidget(viewer=self.viewer)
         self.pred_widget = PredWidget(viewer=self.viewer)
-        self.crop_widget = CropWidget(viewer=self.viewer)
+        self.crop_widget = AnalyzeWidget(viewer=self.viewer)
         
         tab0 = self._init_scroll(self.preprocess_widget)
         tab1 = self._init_scroll(self.gt_widget)
