@@ -11,16 +11,20 @@ from skimage.restoration import rolling_ball
 from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
 from .utils.post_proc import fit_line_length_in_box
-from ._widget_utils import _setup_spin
+from ._widget_utils import _setup_spin, create_resolution_group
 
 
 class AnalyzeWidget(QWidget):
-    def __init__(self, viewer: "napari.viewer.Viewer"):
+    def __init__(self, viewer: "napari.viewer.Viewer", parent_widget=None):
         super().__init__()
         self.viewer = viewer
         self.post_syn_labels = None
+        self.parent_widget = parent_widget
 
         layout = QVBoxLayout()
+
+        res_group, self.xyresbox, self.zresbox, self.z_scale = create_resolution_group(self)
+        layout.addWidget(res_group)
 
         layers_box = QGroupBox('Layers')
         layers_layout = QGridLayout()

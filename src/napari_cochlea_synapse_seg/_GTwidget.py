@@ -14,7 +14,7 @@ from skimage.filters import threshold_triangle
 from napari.utils.notifications import show_error, show_info
 from qtpy.QtGui import QFontMetrics
 
-from ._widget_utils import _setup_spin, _limitStretch
+from ._widget_utils import _setup_spin, _limitStretch, create_resolution_group
 import os
 import numpy as np
 import zarr
@@ -26,9 +26,10 @@ if TYPE_CHECKING:
 class GTWidget(QWidget):
     # your QWidget.__init__ can optionally request the napari viewer instance
     # use a type annotation of 'napari.viewer.Viewer' for any parameter
-    def __init__(self, viewer: "napari.viewer.Viewer"):
+    def __init__(self, viewer: "napari.viewer.Viewer", parent_widget=None):
         super().__init__()
         self.viewer = viewer
+        self.parent_widget = parent_widget
         self.init_ui()
 
     def init_ui(self):
@@ -42,40 +43,24 @@ class GTWidget(QWidget):
         self.viewer.layers.events.inserted.connect(self.update_layer_choices)
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
         self.update_possible_functions()
-        # self.viewer.layers.events.inserted.connect(self._rescan_layers, position="last")
-        # self.viewer.layers.events.removed.connect(self._rescan_layers, position="last")
 
     def setup_image_box(self):
+        res_group, self.xyresbox, self.zresbox, self.z_scale = create_resolution_group(self)
+        self.layout().addWidget(res_group)
+
         self.active_image = QComboBox()        
         box2 = QGroupBox('Image tools')
         _limitStretch(self.active_image)
-
-        self.xyresbox = QDoubleSpinBox()
-        self.zresbox  = QDoubleSpinBox()
-
-        self.z_scale = QCheckBox("Scale z-dimension")
-
-        _setup_spin(self, self.xyresbox,  minval=0, val=1, step=0.05, attrname='xyres', dec=4, dtype=float)
-        _setup_spin(self, self.zresbox,  minval=0, val=1, step=0.05, attrname='zres', dec=4, dtype=float)
+        
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
-        self.active_image.currentTextChanged.connect(lambda: self.xyresbox.setValue(self.xyres))
-        self.active_image.currentTextChanged.connect(lambda: self.zresbox.setValue(self.zres))
         self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(
             int(self.viewer.layers[self.active_image.currentText()].data.max())) if self.active_image.currentText() in self.viewer.layers else None)
         self.active_image.currentTextChanged.connect(self.update_possible_functions)
-        self.z_scale.stateChanged.connect(self._set_z_scale)
-
+        
         image_gbox = QVBoxLayout()
         layer_select = QHBoxLayout()
         layer_select.addWidget(QLabel('presynaptic layer:'), stretch=1) ; layer_select.addWidget(self.active_image, stretch=3)
         image_gbox.addLayout(layer_select)
-        res_layout = QHBoxLayout()
-        res_layout.addWidget(QLabel('xy res:'))
-        res_layout.addWidget(self.xyresbox)
-        res_layout.addWidget(QLabel('z res:'))
-        res_layout.addWidget(self.zresbox)
-        image_gbox.addLayout(res_layout)
-        image_gbox.addWidget(self.z_scale)
 
         box2.setLayout(image_gbox)
 
@@ -211,7 +196,6 @@ class GTWidget(QWidget):
         labels_gbox.addWidget(self.labcheck, 1, 0); labels_gbox.addWidget(self.addbtn, 1, 1)
         labels_gbox.addWidget(self.labelbox, 2, 0)
         labels_gbox.addWidget(self.removebtn, 2, 1)
-        #labels_gbox.addWidget(self.maxlab, 3, 0)
         labels_gbox.addWidget(QLabel('merge labels:'), 4, 0); 
         labels_gbox.addWidget(self.active_merge_label, 4, 1); 
         labels_gbox.addWidget(self.mlsbtn, 5, 0, 1, 2)
@@ -318,6 +302,31 @@ class GTWidget(QWidget):
         
         n = self.viewer.layers[lab].data.max()
         self.viewer.layers[lab].selected_label = (n + 1)
+    
+    def _update_xy_res(self, val):
+        self.xyres = val
+        self.xyresbox.setValue(self.xyres)
+        return
+    
+    def _update_z_res(self, val):
+        self.zres = val
+        self.zresbox.setValue(self.zres)
+        return
+    
+    def _update_z_scale(self, state):
+        self.z_scale_state = state
+        self.z_scale.setChecked(state)
+        return
+    
+    def _on_xy_res_change(self, value):
+        self.xyres = value
+        if self.parent_widget:
+            self.parent_widget.xy_res_changed.emit(value)
+    
+    def _on_z_res_change(self, value):
+        self.zres = value
+        if self.parent_widget:
+            self.parent_widget.z_res_changed.emit(value)
 
     def _connect_point_events(self):
         # remove connection first:
@@ -509,32 +518,6 @@ class GTWidget(QWidget):
             completer = QCompleter(files_in_dir, self.file_name_input)
             #completer.setCaseSensitivity(Qt.CaseInsensitive)
             self.file_name_input.setCompleter(completer)
-    def _set_z_scale(self):
-        if self.z_scale.isChecked():
-            try:
-                self.viewer.layers.events.inserted.disconnect(self.scale_layers)
-            except (TypeError, RuntimeError):
-                pass
-            self.viewer.layers.events.inserted.connect(self.scale_layers)
-            try:
-                self.viewer.layers.events.removed.disconnect(self.scale_layers)
-            except (TypeError, RuntimeError):
-                pass
-            self.viewer.layers.events.removed.connect(self.scale_layers)
-            self.scale_layers()
-        else:
-            try:
-                self.viewer.layers.events.inserted.disconnect(self.scale_layers)
-                self.viewer.layers.events.removed.disconnect(self.scale_layers)
-            except (TypeError, RuntimeError):
-                pass
-            for layer in self.viewer.layers:
-                layer.scale = [1, 1, 1]
-
-    def scale_layers(self, event=None):
-        for layer in self.viewer.layers:
-            z_scale_factor = self.zresbox.value() / self.xyresbox.value()
-            layer.scale = [z_scale_factor, 1, 1]
 
     def _save_zarr(self, threeD=True, twoD=False):
 
@@ -649,12 +632,12 @@ class GTWidget(QWidget):
 
         if imgpath is not None and imgpath.endswith('.tif'):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
-            self.xyres = x
-            self.zres = z
+            self._update_xy_res(x)
+            self._update_z_res(z)
         if imgpath is not None and '.zarr' in imgpath:
             [z, y, x] = self._read_zarr_voxel_size(imgpath)
-            self.xyres = x
-            self.zres = z
+            self._update_xy_res(x)
+            self._update_z_res(z)
 
         # TODO: add functionality for .czi or other formats?
     

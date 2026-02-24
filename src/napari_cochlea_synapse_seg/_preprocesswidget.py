@@ -7,9 +7,9 @@ import numpy as np
 import tifffile
 
 from typing import TYPE_CHECKING
-from ._widget_utils import _setup_spin, _limitStretch
+from ._widget_utils import _setup_spin, _limitStretch, create_resolution_group
 
-from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
+from qtpy.QtWidgets import QLabel, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QWidget, QComboBox
 from napari.layers.utils.stack_utils import stack_to_images
 from napari.utils.notifications import show_info, show_error
 
@@ -17,9 +17,10 @@ if TYPE_CHECKING:
     import napari
                 
 class PreprocessWidget(QWidget):
-    def __init__(self, viewer: "napari.viewer.Viewer"):
+    def __init__(self, viewer: "napari.viewer.Viewer", parent_widget=None):
         super().__init__()
         self.viewer = viewer
+        self.parent_widget = parent_widget
         self.init_ui()
 
     def init_ui(self):
@@ -33,8 +34,6 @@ class PreprocessWidget(QWidget):
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
 
     def setup_image_box(self):
-        self.xyres = 1
-        self.zres = 1
         self.img_shape = None
 
         self.active_image = QComboBox()
@@ -42,25 +41,19 @@ class PreprocessWidget(QWidget):
         
         box2 = QGroupBox('Image tools')
 
-        xyresbox = QDoubleSpinBox()
-        zresbox  = QDoubleSpinBox()
         self.split_choice = QComboBox()
         splitbtn = QPushButton('Split channels')
         splitbtn.clicked.connect(self._split_channels); 
 
-        _setup_spin(self, xyresbox,  minval=0, val=self.xyres, step=0.05, attrname='xyres', dec=4, dtype=float)
-        _setup_spin(self, zresbox,  minval=0, val=self.zres, step=0.05, attrname='zres', dec=4, dtype=float)
+        # Create resolution group using utility function
+        res_group, self.xyresbox, self.zresbox, self.z_scale = create_resolution_group(self)
+        self.layout().addWidget(res_group)
+
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
-        self.active_image.currentTextChanged.connect(lambda: xyresbox.setValue(self.xyres))
-        self.active_image.currentTextChanged.connect(lambda: zresbox.setValue(self.zres))
         self.active_image.currentTextChanged.connect(self._update_split_choice)
 
         image_gbox = QGridLayout()
         image_gbox.addWidget(QLabel('image layer:'), 0, 0) ; image_gbox.addWidget(self.active_image, 0, 1)
-        image_gbox.addWidget(QLabel('xy res:'), 1, 0) 
-        image_gbox.addWidget(xyresbox, 1, 1)
-        image_gbox.addWidget(QLabel('z res:'), 2, 0) 
-        image_gbox.addWidget(zresbox, 2, 1)
         image_gbox.addWidget(self.split_choice, 3, 0)
         image_gbox.addWidget(splitbtn, 3, 1)
 
@@ -144,6 +137,22 @@ class PreprocessWidget(QWidget):
                 if d == np.min(dims):
                     default_choice = i+1
             self.split_choice.setCurrentIndex(default_choice)
+        return
+
+    def _update_xy_res(self, val):
+        self.xyres = val
+        self.xyresbox.setValue(self.xyres)
+        return
+    
+    def _update_z_res(self, val):
+        self.zres = val
+        self.zresbox.setValue(self.zres)
+        return
+    
+    def _update_z_scale(self, state):
+        self.z_scale_state = state
+        self.z_scale.setChecked(state)
+        return
 
     def _convert_ch2z(self):
         try:
@@ -228,10 +237,8 @@ class PreprocessWidget(QWidget):
             
         if imgpath is not None and imgpath.endswith('.tif'):
             [z, y, x] = _read_tiff_voxel_size(imgpath)
-            self.xyres = x
-            self.zres = z
-
-        self.img_shape = img.data.shape
+            self._update_xy_res(x)
+            self._update_z_res(z)
         # TODO: add functionality for .czi or other formats?
     
     def _snap_to_max(self):

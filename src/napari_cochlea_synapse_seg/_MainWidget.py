@@ -8,12 +8,12 @@ import atexit
 from pathlib import Path
 
 from qtpy.QtWidgets import QFileDialog, QTabWidget, QScrollArea, QSizePolicy, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
-from qtpy.QtCore import Qt, QTimer
+from qtpy.QtCore import Qt, QTimer, Signal
 from napari.utils.notifications import show_info, show_error
 
 from ._GTWidget import GTWidget
 from ._PredWidget import PredWidget
-from ._PreprocessWidget import PreProcessWidget
+from ._PreprocessWidget import PreprocessWidget
 from ._AnalyzeWidget import AnalyzeWidget
 from ._settings import load_settings, save_settings
 
@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     import napari
                 
 class SynapSegWidget(QWidget):
+    xy_res_changed = Signal(float)
+    z_res_changed = Signal(float)
+    z_scale_state_changed = Signal(bool)
+
     def __init__(self, viewer: "napari.viewer.Viewer"):
         super().__init__()
         self.viewer = viewer
@@ -34,17 +38,21 @@ class SynapSegWidget(QWidget):
         
         # Register cleanup on exit to save settings when napari closes
         atexit.register(self._save_settings_silent)
-        
+
         self.init_ui()
     
     def init_ui(self):
         tab_widget = QTabWidget()
+        # add shared variables:
+        self.shared_presynaptic_layer = None
+        self.shared_xy_res = 1
+        self.shared_z_res = 1
         
         # Store references to actual widget instances
-        self.preprocess_widget = PreProcessWidget(viewer=self.viewer)
-        self.gt_widget = GTWidget(viewer=self.viewer)
+        self.preprocess_widget = PreprocessWidget(viewer=self.viewer, parent_widget=self)
+        self.gt_widget = GTWidget(viewer=self.viewer, parent_widget=self)
         self.pred_widget = PredWidget(viewer=self.viewer)
-        self.crop_widget = AnalyzeWidget(viewer=self.viewer)
+        self.crop_widget = AnalyzeWidget(viewer=self.viewer, parent_widget=self)
         
         tab0 = self._init_scroll(self.preprocess_widget)
         tab1 = self._init_scroll(self.gt_widget)

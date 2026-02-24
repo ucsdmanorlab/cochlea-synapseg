@@ -1,4 +1,5 @@
 from qtpy.QtGui import QFontMetrics
+from qtpy.QtWidgets import QLabel, QDoubleSpinBox, QGroupBox, QVBoxLayout, QHBoxLayout, QCheckBox
 
 def _wrap_builtin_method(method, *args, **kwargs):
     """
@@ -16,7 +17,8 @@ def _wrap_builtin_method(method, *args, **kwargs):
         method(value)
     return wrapper
 
-def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int):
+def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=None, step=None, dec=None, attrname=None, dtype=int, connect_func=None):
+    spinbox.setKeyboardTracking(False)
     if minval is not None:
         spinbox.setMinimum(minval)
     if maxval is not None:
@@ -32,6 +34,8 @@ def _setup_spin(curr_class, spinbox, minval=None, maxval=None, suff=None, val=No
     if attrname is not None:
         spinbox.valueChanged[dtype].connect(lambda value: setattr(curr_class, attrname, value))
         setattr(curr_class, attrname, spinbox.value())
+    if connect_func is not None:
+        spinbox.valueChanged[dtype].connect(connect_func)
 
 def _limitStretch(widget, max_chars=16):
     font_metrics = QFontMetrics(widget.font())
@@ -111,3 +115,106 @@ def update_napari_layer_combos(viewer, combos_dict, merge_combo=None, merge_butt
             except (TypeError, RuntimeError, ValueError):
                 pass
             layer.events.name.connect(on_change_callback)
+
+
+def create_resolution_group(widget_instance):#, xy_res_changed_callback=None, z_res_changed_callback=None):
+    def _update_xy_res(val):
+        widget_instance.xyres = val
+        widget_instance.xyresbox.setValue(widget_instance.xyres)
+    
+    def _update_z_res(val):
+        widget_instance.zres = val
+        widget_instance.zresbox.setValue(widget_instance.zres)
+    
+    def _update_z_scale(state):
+        widget_instance.z_scale_state = state
+        widget_instance.z_scale.setChecked(state)
+
+    if widget_instance.parent_widget:
+        widget_instance.parent_widget.xy_res_changed.connect(_update_xy_res)
+        widget_instance.parent_widget.z_res_changed.connect(_update_z_res)
+        widget_instance.parent_widget.z_scale_state_changed.connect(_update_z_scale)
+    
+    def _on_xy_res_change(value):
+        widget_instance.xyres = value
+        _set_z_scale(widget_instance.z_scale.checkState()) 
+        if widget_instance.parent_widget:
+            widget_instance.parent_widget.xy_res_changed.emit(value)
+
+    def _on_z_res_change(value):
+        widget_instance.zres = value
+        _set_z_scale(widget_instance.z_scale.checkState()) 
+        if widget_instance.parent_widget:
+            widget_instance.parent_widget.z_res_changed.emit(value)
+    
+    def _on_z_scale_change(state):
+        widget_instance.z_scale_state = state
+        if widget_instance.parent_widget:
+            widget_instance.parent_widget.z_scale_state_changed.emit(state) 
+
+    def _set_z_scale(state):
+        layers = widget_instance.viewer.layers
+        if state == 2:  # Checked
+            try:
+                layers.events.inserted.disconnect(scale_layers)
+            except (TypeError, RuntimeError):
+                pass
+            layers.events.inserted.connect(scale_layers)
+            try:
+                layers.events.removed.disconnect(scale_layers)
+            except (TypeError, RuntimeError):
+                pass
+            layers.events.removed.connect(scale_layers)
+            scale_layers()
+        else:
+            try:
+                layers.events.inserted.disconnect(scale_layers)
+                layers.events.removed.disconnect(scale_layers)
+            except (TypeError, RuntimeError):
+                pass
+            for layer in layers:
+                layer.scale = [1, 1, 1]
+
+    def scale_layers(event=None):
+        for layer in widget_instance.viewer.layers:
+            if widget_instance.xyresbox.value() == 0 or widget_instance.zresbox.value() == 0:
+                return
+            z_scale_factor = widget_instance.zresbox.value() / widget_instance.xyresbox.value()
+            layer.scale = [z_scale_factor, 1, 1]
+
+    # Create spin boxes
+    xyresbox = QDoubleSpinBox()
+    zresbox = QDoubleSpinBox()
+    z_scale = QCheckBox("Scale z dimension")
+    z_scale.stateChanged.connect(_set_z_scale)
+    z_scale.stateChanged.connect(_on_z_scale_change)
+    
+    # Setup spin boxes with default parameters
+    _setup_spin(
+        widget_instance, xyresbox,
+        minval=0, val=1, step=0.05, attrname='xyres',
+        dec=4, dtype=float, connect_func=_on_xy_res_change
+    )
+    _setup_spin(
+        widget_instance, zresbox,
+        minval=0, val=1, step=0.05, attrname='zres',
+        dec=4, dtype=float, connect_func=_on_z_res_change
+    )
+    
+    # Create layout
+    res_box = QHBoxLayout()
+    res_box.addWidget(QLabel('xy (um/px):'))
+    res_box.addWidget(xyresbox)
+    res_box.addWidget(QLabel('z (um/px):'))
+    res_box.addWidget(zresbox)
+
+    res_box2 = QVBoxLayout()
+    res_box2.addLayout(res_box)
+    res_box2.addWidget(z_scale)
+    
+    # Create group box
+    res_group = QGroupBox('Resolution')
+    res_group.setLayout(res_box2)
+    
+    return res_group, xyresbox, zresbox, z_scale
+
