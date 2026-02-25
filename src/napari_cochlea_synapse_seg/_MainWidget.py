@@ -47,12 +47,14 @@ class SynapSegWidget(QWidget):
         self.shared_presynaptic_layer = None
         self.shared_xy_res = 1
         self.shared_z_res = 1
+        self.shared_z_scale_state = False
         
         # Store references to actual widget instances
+        # Create AnalyzeWidget first so it's ready to receive signals from other widgets
+        self.crop_widget = AnalyzeWidget(viewer=self.viewer, parent_widget=self)
         self.preprocess_widget = PreprocessWidget(viewer=self.viewer, parent_widget=self)
         self.gt_widget = GTWidget(viewer=self.viewer, parent_widget=self)
         self.pred_widget = PredWidget(viewer=self.viewer)
-        self.crop_widget = AnalyzeWidget(viewer=self.viewer, parent_widget=self)
         
         tab0 = self._init_scroll(self.preprocess_widget)
         tab1 = self._init_scroll(self.gt_widget)
@@ -85,6 +87,20 @@ class SynapSegWidget(QWidget):
         
         # Connect all widgets to trigger auto-save on changes
         self._connect_autosave()
+
+        # Keep shared resolution values in sync
+        self.xy_res_changed.connect(self._set_shared_xy_res)
+        self.z_res_changed.connect(self._set_shared_z_res)
+        self.z_scale_state_changed.connect(self._set_shared_z_scale_state)
+
+    def _set_shared_xy_res(self, value: float):
+        self.shared_xy_res = value
+
+    def _set_shared_z_res(self, value: float):
+        self.shared_z_res = value
+
+    def _set_shared_z_scale_state(self, state: bool):
+        self.shared_z_scale_state = state
 
     def _connect_autosave(self):
         """Connect all settings controls to trigger auto-save after changes."""

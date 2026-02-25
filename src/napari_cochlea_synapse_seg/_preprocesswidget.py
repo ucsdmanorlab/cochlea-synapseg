@@ -139,21 +139,6 @@ class PreprocessWidget(QWidget):
             self.split_choice.setCurrentIndex(default_choice)
         return
 
-    def _update_xy_res(self, val):
-        self.xyres = val
-        self.xyresbox.setValue(self.xyres)
-        return
-    
-    def _update_z_res(self, val):
-        self.zres = val
-        self.zresbox.setValue(self.zres)
-        return
-    
-    def _update_z_scale(self, state):
-        self.z_scale_state = state
-        self.z_scale.setChecked(state)
-        return
-
     def _convert_ch2z(self):
         try:
             pts = self.viewer.layers[self.active_points.currentText()]

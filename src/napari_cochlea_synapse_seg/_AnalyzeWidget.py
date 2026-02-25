@@ -29,7 +29,6 @@ class AnalyzeWidget(QWidget):
         layers_box = QGroupBox('Layers')
         layers_layout = QGridLayout()
 
-
         # Layer selectors
         self.img1_combo = QComboBox()
         self.img2_combo = QComboBox()

@@ -303,31 +303,6 @@ class GTWidget(QWidget):
         n = self.viewer.layers[lab].data.max()
         self.viewer.layers[lab].selected_label = (n + 1)
     
-    def _update_xy_res(self, val):
-        self.xyres = val
-        self.xyresbox.setValue(self.xyres)
-        return
-    
-    def _update_z_res(self, val):
-        self.zres = val
-        self.zresbox.setValue(self.zres)
-        return
-    
-    def _update_z_scale(self, state):
-        self.z_scale_state = state
-        self.z_scale.setChecked(state)
-        return
-    
-    def _on_xy_res_change(self, value):
-        self.xyres = value
-        if self.parent_widget:
-            self.parent_widget.xy_res_changed.emit(value)
-    
-    def _on_z_res_change(self, value):
-        self.zres = value
-        if self.parent_widget:
-            self.parent_widget.z_res_changed.emit(value)
-
     def _connect_point_events(self):
         # remove connection first:
         for layer in self.viewer.layers:
@@ -597,13 +572,18 @@ class GTWidget(QWidget):
         
         pts.data = np.array(peaks, dtype=np.float32)
         pts.refresh()
-    
+
     def _calc_pk_thresh(self):
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
             show_error("Image layer not defined. Cannot calculate peak threshold.")
             return
+        try:
+            img.chunks
+            img = img.compute()
+        except:
+            pass
         img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
         initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1)
         peak_vals = img[tuple(initial_peaks.T)]
@@ -616,7 +596,7 @@ class GTWidget(QWidget):
                 ndim=3, 
                 face_color='magenta', 
                 border_color='white',
-                size=5,
+                size=12,
                 out_of_slice_display=True,
                 opacity=0.7,
                 symbol='x')
@@ -634,10 +614,22 @@ class GTWidget(QWidget):
             [z, y, x] = self._read_tiff_voxel_size(imgpath)
             self._update_xy_res(x)
             self._update_z_res(z)
+            if self.z_scale.isChecked(): 
+                self._scale_layers()
+            # Emit to parent to sync other widgets
+            if self.parent_widget:
+                self.parent_widget.xy_res_changed.emit(x)
+                self.parent_widget.z_res_changed.emit(z)
         if imgpath is not None and '.zarr' in imgpath:
             [z, y, x] = self._read_zarr_voxel_size(imgpath)
             self._update_xy_res(x)
             self._update_z_res(z)
+            if self.z_scale.isChecked(): 
+                self._scale_layers()
+            # Emit to parent to sync other widgets
+            if self.parent_widget:
+                self.parent_widget.xy_res_changed.emit(x)
+                self.parent_widget.z_res_changed.emit(z)
 
         # TODO: add functionality for .czi or other formats?
     

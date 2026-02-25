@@ -117,24 +117,7 @@ def update_napari_layer_combos(viewer, combos_dict, merge_combo=None, merge_butt
             layer.events.name.connect(on_change_callback)
 
 
-def create_resolution_group(widget_instance):#, xy_res_changed_callback=None, z_res_changed_callback=None):
-    def _update_xy_res(val):
-        widget_instance.xyres = val
-        widget_instance.xyresbox.setValue(widget_instance.xyres)
-    
-    def _update_z_res(val):
-        widget_instance.zres = val
-        widget_instance.zresbox.setValue(widget_instance.zres)
-    
-    def _update_z_scale(state):
-        widget_instance.z_scale_state = state
-        widget_instance.z_scale.setChecked(state)
-
-    if widget_instance.parent_widget:
-        widget_instance.parent_widget.xy_res_changed.connect(_update_xy_res)
-        widget_instance.parent_widget.z_res_changed.connect(_update_z_res)
-        widget_instance.parent_widget.z_scale_state_changed.connect(_update_z_scale)
-    
+def create_resolution_group(widget_instance):
     def _on_xy_res_change(value):
         widget_instance.xyres = value
         _set_z_scale(widget_instance.z_scale.checkState()) 
@@ -178,6 +161,7 @@ def create_resolution_group(widget_instance):#, xy_res_changed_callback=None, z_
     def scale_layers(event=None):
         for layer in widget_instance.viewer.layers:
             if widget_instance.xyresbox.value() == 0 or widget_instance.zresbox.value() == 0:
+                print("Resolution values must be non-zero to scale layers.")
                 return
             z_scale_factor = widget_instance.zresbox.value() / widget_instance.xyresbox.value()
             layer.scale = [z_scale_factor, 1, 1]
@@ -215,6 +199,57 @@ def create_resolution_group(widget_instance):#, xy_res_changed_callback=None, z_
     # Create group box
     res_group = QGroupBox('Resolution')
     res_group.setLayout(res_box2)
+
+    def _update_xy_res(val):
+        widget_instance.xyres = val
+        widget_instance.xyresbox.setValue(widget_instance.xyres)
+        # Trigger scaling if checkbox is checked
+        if widget_instance.z_scale.isChecked():
+            scale_layers()
+    
+    def _update_z_res(val):
+        widget_instance.zres = val
+        widget_instance.zresbox.setValue(widget_instance.zres)
+        # Trigger scaling if checkbox is checked
+        if widget_instance.z_scale.isChecked():
+            scale_layers()
+    
+    def _update_z_scale(state):
+        widget_instance.z_scale_state = state
+        widget_instance.z_scale.setChecked(state)
+
+    if widget_instance.parent_widget:
+        widget_instance.parent_widget.xy_res_changed.connect(_update_xy_res)
+        widget_instance.parent_widget.z_res_changed.connect(_update_z_res)
+        widget_instance.parent_widget.z_scale_state_changed.connect(_update_z_scale)
+    else:
+        print(f"No parent_widget for {widget_instance.__class__.__name__}")
+
+    widget_instance._scale_layers = scale_layers
+    widget_instance._update_xy_res = _update_xy_res
+    widget_instance._update_z_res = _update_z_res
+    widget_instance._update_z_scale = _update_z_scale
+
+    # Initialize from shared parent state if available
+    if widget_instance.parent_widget:
+        parent = widget_instance.parent_widget
+        if hasattr(parent, 'shared_xy_res'):
+            xyresbox.blockSignals(True)
+            xyresbox.setValue(parent.shared_xy_res)
+            xyresbox.blockSignals(False)
+            widget_instance.xyres = parent.shared_xy_res
+        if hasattr(parent, 'shared_z_res'):
+            zresbox.blockSignals(True)
+            zresbox.setValue(parent.shared_z_res)
+            zresbox.blockSignals(False)
+            widget_instance.zres = parent.shared_z_res
+        if hasattr(parent, 'shared_z_scale_state'):
+            z_scale.blockSignals(True)
+            z_scale.setChecked(parent.shared_z_scale_state)
+            z_scale.blockSignals(False)
+            widget_instance.z_scale_state = parent.shared_z_scale_state
+        # Apply scaling if needed
+        _set_z_scale(z_scale.checkState())
     
     return res_group, xyresbox, zresbox, z_scale
 
