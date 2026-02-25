@@ -193,6 +193,7 @@ class AnalyzeWidget(QWidget):
     def _analyze(self):
         save_dir = self.get_save_directory()
         if ((self.montage_check.isChecked() and (self.save_check.isChecked() or self.save_montage_check.isChecked())) or self.presyn_check.isChecked()) and not save_dir:
+            show_error("No save directory chosen. Please select a directory to save outputs or uncheck save options.")
             return
         if self.montage_check.isChecked():
             self.create_montage()
@@ -473,9 +474,6 @@ class AnalyzeWidget(QWidget):
             return grid, cents
     
     def create_montage(self):
-        if (self.save_check.isChecked() or self.save_montage_check.isChecked()) and not self.save_dir:
-            return  # User cancelled directory selection
-        
         img1 = self.viewer.layers[self.img1_combo.currentText()].data
         img2 = self.viewer.layers[self.img2_combo.currentText()].data
         img2_labels = self._calc_post_syn_detection()#img2 > threshold_otsu(img2)
@@ -580,15 +578,18 @@ class AnalyzeWidget(QWidget):
                 self.viewer.layers.remove(layer)
             else:
                 layer.visible = False
+
+        pre_syn_contrast = self.viewer.layers[self.img1_combo.currentText()].contrast_limits
+        post_syn_contrast = self.viewer.layers[self.img2_combo.currentText()].contrast_limits
         self.viewer.add_image(montage1, 
                               name="Montage - Presynaptic", 
                               colormap='magenta', 
-                              contrast_limits=self.viewer.layers[self.img1_combo.currentText()].contrast_limits)
+                              contrast_limits=pre_syn_contrast)
         self.viewer.add_image(montage2,
                               name="Montage - Postsynaptic", 
                               colormap='green', 
                               blending='additive',
-                              contrast_limits=self.viewer.layers[self.img2_combo.currentText()].contrast_limits)
+                              contrast_limits=post_syn_contrast)
         # set viewer to 3D mode:
         self.viewer.dims.ndisplay = 3
         self.viewer.camera.center = [i//2 for i in montage1.data.shape]
@@ -615,10 +616,12 @@ class AnalyzeWidget(QWidget):
             filename = os.path.join(self.save_dir, f"montage_{self.sort_combo.currentText()}{suff}")
 
             # create rgb image:
-            rgb_montage = np.zeros((montage1.shape[1], montage1.shape[2], 3), dtype=montage1.dtype)
-            rgb_montage[..., 0] = np.max(montage1, axis=0)  # Red channel (presynaptic)
-            rgb_montage[..., 2] = np.max(montage1, axis=0)  # Blue + red = magenta (presynaptic)
-            rgb_montage[..., 1] = np.max(montage2, axis=0)  # Green channel (postsynaptic)
+            pre_syn_max = (np.max(montage1, axis=0)-pre_syn_contrast[0])/(pre_syn_contrast[1]-pre_syn_contrast[0])
+            post_syn_max = (np.max(montage2, axis=0)-post_syn_contrast[0])/(post_syn_contrast[1]-post_syn_contrast[0])
+            rgb_montage = np.zeros((montage1.shape[1], montage1.shape[2], 3), dtype=np.uint8)
+            rgb_montage[..., 0] = np.clip(pre_syn_max*255, a_min=0, a_max=255).astype(np.uint8)  # Red channel (presynaptic)
+            rgb_montage[..., 2] = np.clip(pre_syn_max*255, a_min=0, a_max=255).astype(np.uint8)  # Blue + red = magenta (presynaptic)
+            rgb_montage[..., 1] = np.clip(post_syn_max*255, a_min=0, a_max=255).astype(np.uint8)  # Green channel (postsynaptic)
 
             plt.figure(figsize=(10,10))
             plt.imshow(rgb_montage)
