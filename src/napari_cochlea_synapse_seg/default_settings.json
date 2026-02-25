@@ -28,7 +28,7 @@
     "sig_z": 0.5,
     "size_filt": 0
   },
-  "CropWidget": {
+  "AnalyzeWidget": {
     "save_presyn_props": true,
     "create_montage": false,
     "crop_size_xy": 12,

@@ -40,6 +40,8 @@ def load_settings(settings_path=None) -> Dict[str, Any]:
     """
     if settings_path is None:
         settings_path = get_settings_path()
+        if not settings_path.exists():
+            settings_path = Path(__file__).parent / 'default_settings.json'
     
     if not settings_path.exists():
         return {

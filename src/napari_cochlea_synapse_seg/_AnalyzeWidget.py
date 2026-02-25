@@ -12,6 +12,8 @@ from skimage.segmentation import watershed
 from scipy.ndimage import gaussian_filter
 from .utils.post_proc import fit_line_length_in_box
 from ._widget_utils import _setup_spin, create_resolution_group
+from napari.utils.notifications import show_error, show_info
+
 
 
 class AnalyzeWidget(QWidget):
@@ -217,46 +219,50 @@ class AnalyzeWidget(QWidget):
 
         try:
             pre_syn_labels = self.viewer.layers[self.labels_combo.currentText()].data
-            ctbp2 = self.viewer.layers[self.img1_combo.currentText()]
-            ctbp2_data = ctbp2.data
+            ctbp2_data = self.viewer.layers[self.img1_combo.currentText()].data
             glur2_data = self.viewer.layers[self.img2_combo.currentText()].data
-            pixel_size = ctbp2.scale if ctbp2.scale is not None else [1.0, 1.0, 1.0]
+            pixel_size = [self.zresbox.value(), self.xyresbox.value(), self.xyresbox.value()]
             if hasattr(pre_syn_labels, 'compute'):
                 pre_syn_labels = pre_syn_labels.compute()
             if hasattr(ctbp2_data, 'compute'):
                 ctbp2_data = ctbp2_data.compute()
         except KeyError:
             return
-        syn_vol = regionprops(pre_syn_labels, intensity_image=ctbp2_data, spacing=pixel_size)
-        avg_syn_volume = np.mean([s.area for s in syn_vol])
-        avg_syn_intensity = np.mean([s.mean_intensity for s in syn_vol])
+        
         syn_stats = regionprops_table(pre_syn_labels, intensity_image=ctbp2_data, spacing=pixel_size,
                                 properties=['label', 'area', 'intensity_min', 'intensity_max', 'intensity_mean',
                                             'centroid', 'centroid_weighted', 'equivalent_diameter_area', 
                                             'axis_major_length', 'axis_minor_length', 'solidity'])
         syn_stats_df = pd.DataFrame(syn_stats)
         
-        # post_syn = []
-        # post_syn_int = []
-        # for label_id in syn_stats['label']:
-        #     if label_id == 0:
-        #         continue
-        #     post_syn_strict = np.any(post_syn_labels[pre_syn_labels==label_id])
-        #     post_syn.append(post_syn_strict)
+        post_syn_labels = self._calc_post_syn_detection()
+        if post_syn_labels is not None:
+            post_syn = []
+            post_syn_int = []
+            for label_id in syn_stats['label']:
+                if label_id == 0:
+                    continue
+                post_syn_strict = np.any(post_syn_labels[pre_syn_labels==label_id])
+                post_syn.append(post_syn_strict)
 
-        #     row = syn_stats_df.loc[syn_stats_df['label'] == label_id, ['centroid-0', 'centroid-1', 'centroid-2']].iloc[0]
-        #     z, y, x = row['centroid-0'], row['centroid-1'], row['centroid-2']
+                row = syn_stats_df.loc[syn_stats_df['label'] == label_id, ['centroid-0', 'centroid-1', 'centroid-2']].iloc[0]
+                z, y, x = row['centroid-0'], row['centroid-1'], row['centroid-2']
 
-        #     centroid_px = (int(z/pixel_size[0]), int(y/pixel_size[1]), int(x/pixel_size[2]))
-        #     local_crop = glur2_data[
-        #         max(0, centroid_px[0]-2):centroid_px[0]+3,
-        #         max(0, centroid_px[1]-4):centroid_px[1]+5,
-        #         max(0, centroid_px[2]-4):centroid_px[2]+5
-        #     ]
-        #     post_syn_int.append(np.mean(local_crop))
+                centroid_px = (int(z/pixel_size[0]), int(y/pixel_size[1]), int(x/pixel_size[2]))
+                local_crop = glur2_data[
+                    max(0, centroid_px[0]-2):centroid_px[0]+3,
+                    max(0, centroid_px[1]-4):centroid_px[1]+5,
+                    max(0, centroid_px[2]-4):centroid_px[2]+5
+                ]
+                post_syn_int.append(np.mean(local_crop))
 
-        outfi = os.path.join(self.save_dir, f'pre_syn_stats.csv')
-        syn_stats_df.to_csv(outfi, index=False)
+        syn_stats_df['pre_syn_image_path'] = self.viewer.layers[self.img1_combo.currentText()].source.path if hasattr(self.viewer.layers[self.img1_combo.currentText()].source, 'path') else 'N/A'
+        syn_stats_df['post_syn_image_path'] = self.viewer.layers[self.img2_combo.currentText()].source.path if hasattr(self.viewer.layers[self.img2_combo.currentText()].source, 'path') else 'N/A'
+        syn_stats_df['pre_syn_seg_path'] = self.viewer.layers[self.labels_combo.currentText()].source.path if hasattr(self.viewer.layers[self.labels_combo.currentText()].source, 'path') else 'N/A'
+        
+        outpath, outpath_agg = self._get_output_paths()
+        
+        syn_stats_df.to_csv(outpath, index=False)
     
         syn_stats_px = regionprops(pre_syn_labels)
         centroids_px = [syn_stat_px.centroid for syn_stat_px in syn_stats_px]
@@ -271,8 +277,78 @@ class AnalyzeWidget(QWidget):
             ribbons_per_um = None
         else:
             ribbons_per_um = len(centroids_px) / line_length_um
-        return
+        
+        num_cols = ['area', 'intensity_mean', 'equivalent_diameter_area', 'axis_major_length', 'axis_minor_length', 'solidity']
+        str_cols = ['pre_syn_image_path', 'post_syn_image_path', 'pre_syn_seg_path']
+        
+        # Only include columns that actually exist in the dataframe
+        num_cols = [col for col in num_cols if col in syn_stats_df.columns]
+        str_cols = [col for col in str_cols if col in syn_stats_df.columns]
+        
+        # Build summary statistics in a more readable format
+        summary_stats = {}
+        for col in num_cols:
+            data = syn_stats_df[col].dropna()
+            summary_stats[col] = {
+                'count': len(data),
+                'mean': data.mean(),
+                'std': data.std(),
+                'min': data.min(),
+                'max': data.max(),
+            }
+        # Add ribbons_per_um
+        summary_stats['ribbons_per_um'] = {'mean': ribbons_per_um}
+        
+        # Add string columns (just take the first value as they should all be the same)
+        for col in str_cols:
+            summary_stats[col] = syn_stats_df[col].iloc[0]
+        
+        # Convert to a clean dataframe format
+        image_stats = pd.DataFrame(summary_stats).T
+        image_stats.index.name = 'metric'
+        image_stats.to_csv(outpath_agg, index=True)
+        show_info(f"Pre-synaptic properties saved to {outpath_agg}")
 
+    def _get_output_paths(self):
+        root_name = 'pre_syn_stats'
+        ext = '.csv'
+        base = os.path.join(self.save_dir, root_name)
+        i = None
+
+        # check first path:
+        if os.path.exists(base + ext):
+            i = 1
+            while os.path.exists(f"{base}_{i}{ext}"):
+                i += 1
+        
+        # check agg path:
+        if i is None:
+            outpath_agg = f"{base}_agg{ext}"
+        else:
+            outpath_agg = f"{base}_agg_{i}{ext}"
+        if os.path.exists(outpath_agg):
+            i = 1 if i is None else i+1
+            while os.path.exists(f"{base}_agg_{i}{ext}"):
+                i += 1
+
+        outpath = f"{base}{ext}" if i is None else f"{base}_{i}{ext}"
+        outpath_agg = f"{base}_agg{ext}" if i is None else f"{base}_agg_{i}{ext}"
+        return outpath, outpath_agg
+    
+    def _append_number(self, base, ext='.csv'):
+        pathstring = base + ext
+        if os.path.exists(pathstring):
+            i = 1
+            while os.path.exists(f"{base}_{i}{ext}"):
+                i += 1
+        agg_pathstring = f"{base}_{i}_img{ext}"
+        if os.path.exists(agg_pathstring):
+            i += 1
+            while os.path.exists(f"{base}_{i}_img{ext}"):
+                i += 1
+            return f"{base}_{i}{ext}"
+        return pathstring
+    
     def _show_post_syn_detection(self):
         labels = self._calc_post_syn_detection()
         if labels is None:
@@ -563,6 +639,7 @@ class AnalyzeWidget(QWidget):
             Dictionary of all persistent settings.
         """
         return {
+            'save_dir': self.save_dir,
             'save_presyn_props': self.presyn_check.isChecked(),
             'create_montage': self.montage_check.isChecked(),
             'crop_size_xy': self.crop_size_spin.value(),
@@ -613,3 +690,5 @@ class AnalyzeWidget(QWidget):
             idx = self.threshbox.findText(settings['post_thresh_type'])
             if idx >= 0:
                 self.threshbox.setCurrentIndex(idx)
+        if 'save_dir' in settings:
+            self.save_dir = settings['save_dir']

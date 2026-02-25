@@ -51,7 +51,7 @@ class SynapSegWidget(QWidget):
         
         # Store references to actual widget instances
         # Create AnalyzeWidget first so it's ready to receive signals from other widgets
-        self.crop_widget = AnalyzeWidget(viewer=self.viewer, parent_widget=self)
+        self.analyze_widget = AnalyzeWidget(viewer=self.viewer, parent_widget=self)
         self.preprocess_widget = PreprocessWidget(viewer=self.viewer, parent_widget=self)
         self.gt_widget = GTWidget(viewer=self.viewer, parent_widget=self)
         self.pred_widget = PredWidget(viewer=self.viewer)
@@ -59,7 +59,7 @@ class SynapSegWidget(QWidget):
         tab0 = self._init_scroll(self.preprocess_widget)
         tab1 = self._init_scroll(self.gt_widget)
         tab2 = self._init_scroll(self.pred_widget)
-        tab3 = self._init_scroll(self.crop_widget)
+        tab3 = self._init_scroll(self.analyze_widget)
         
         tab_widget.addTab(tab0, "Preprocess")
         tab_widget.addTab(tab1, "Ground Truth")
@@ -129,11 +129,12 @@ class SynapSegWidget(QWidget):
         self.pred_widget.size_filt_box.valueChanged.connect(self._trigger_autosave)
         
         # Crop Widget controls
-        self.crop_widget.crop_size_spin.valueChanged.connect(self._trigger_autosave)
-        self.crop_widget.crop_size_z_spin.valueChanged.connect(self._trigger_autosave)
-        self.crop_widget.sort_combo.currentTextChanged.connect(self._trigger_autosave)
-        self.crop_widget.save_montage_check.stateChanged.connect(self._trigger_autosave)
-        self.crop_widget.save_check.stateChanged.connect(self._trigger_autosave)
+        self.analyze_widget.crop_btn.clicked.connect(self._trigger_autosave)
+        self.analyze_widget.crop_size_spin.valueChanged.connect(self._trigger_autosave)
+        self.analyze_widget.crop_size_z_spin.valueChanged.connect(self._trigger_autosave)
+        self.analyze_widget.sort_combo.currentTextChanged.connect(self._trigger_autosave)
+        self.analyze_widget.save_montage_check.stateChanged.connect(self._trigger_autosave)
+        self.analyze_widget.save_check.stateChanged.connect(self._trigger_autosave)
     
     def _trigger_autosave(self):
         """Restart the autosave timer (debounced to avoid saving on every keystroke)."""
@@ -168,7 +169,7 @@ class SynapSegWidget(QWidget):
             'version': '1.0',
             'GTWidget': self.gt_widget.to_settings(),
             'PredWidget': self.pred_widget.to_settings(),
-            'CropWidget': self.crop_widget.to_settings(),
+            'AnalyzeWidget': self.analyze_widget.to_settings(),
             'PreProcessWidget': {}  # Add when PreProcessWidget implements to_settings
         }
         
@@ -186,7 +187,7 @@ class SynapSegWidget(QWidget):
                 'version': '1.0',
                 'GTWidget': self.gt_widget.to_settings(),
                 'PredWidget': self.pred_widget.to_settings(),
-                'CropWidget': self.crop_widget.to_settings(),
+                'AnalyzeWidget': self.analyze_widget.to_settings(),
                 'PreProcessWidget': {}
             }
             save_settings(settings)
@@ -217,8 +218,8 @@ class SynapSegWidget(QWidget):
         if 'PredWidget' in settings and settings['PredWidget']:
             self.pred_widget.apply_settings(settings['PredWidget'])
         
-        if 'CropWidget' in settings and settings['CropWidget']:
-            self.crop_widget.apply_settings(settings['CropWidget'])
+        if 'AnalyzeWidget' in settings and settings['AnalyzeWidget']:
+            self.analyze_widget.apply_settings(settings['AnalyzeWidget'])
         
         # Only show info if settings were actually loaded (file existed)
         from ._settings import get_settings_path
@@ -232,7 +233,7 @@ class SynapSegWidget(QWidget):
         if default_path.exists():
             self.gt_widget.apply_settings(settings['GTWidget'])
             self.pred_widget.apply_settings(settings['PredWidget'])
-            self.crop_widget.apply_settings(settings['CropWidget'])
+            self.analyze_widget.apply_settings(settings['AnalyzeWidget'])
             show_info("Default settings restored")
         else:
             show_error("Default settings file not found")

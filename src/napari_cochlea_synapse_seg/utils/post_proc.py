@@ -120,7 +120,6 @@ def fit_line_length_in_box(centroids, volume_shape, voxel_size):
         if norm == 0:
             return None
         direction = direction / norm
-        print(direction, flush=True)
 
         zyx = np.asarray(volume_shape, dtype=float)
 
