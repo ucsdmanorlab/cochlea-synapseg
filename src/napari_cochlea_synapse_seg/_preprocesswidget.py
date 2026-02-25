@@ -34,8 +34,6 @@ class PreprocessWidget(QWidget):
         self.viewer.layers.events.removed.connect(self.update_layer_choices)
 
     def setup_image_box(self):
-        self.img_shape = None
-
         self.active_image = QComboBox()
         _limitStretch(self.active_image)
         
@@ -128,7 +126,12 @@ class PreprocessWidget(QWidget):
             layer.events.name.connect(self.update_layer_choices)
 
     def _update_split_choice(self):
-        dims = self.img_shape
+        current_text = self.active_image.currentText()
+        if not current_text or current_text not in self.viewer.layers:
+            return
+        
+        active_image = self.viewer.layers[current_text]
+        dims = active_image.data.shape
         if dims is not None:
             self.split_choice.clear()
             self.split_choice.addItem("None")
