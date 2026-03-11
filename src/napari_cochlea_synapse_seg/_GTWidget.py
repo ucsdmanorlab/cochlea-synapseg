@@ -13,6 +13,7 @@ from skimage.segmentation import watershed
 from skimage.filters import threshold_triangle
 from napari.utils.notifications import show_error, show_info
 from qtpy.QtGui import QFontMetrics
+from napari.qt.threading import thread_worker
 
 from ._widget_utils import _setup_spin, _limitStretch, create_resolution_group
 import os
@@ -91,15 +92,16 @@ class GTWidget(QWidget):
         self.guessbtn.clicked.connect(self._calc_pk_thresh)
 
         points_gbox = QGridLayout()
-        points_gbox.addWidget(QLabel('points layer:'), 0, 0) ; points_gbox.addWidget(self.active_points, 0, 1)
+        points_gbox.addWidget(ptsbtn, 0, 0, 1, 2)
+        points_gbox.addWidget(QLabel('points layer:'), 1, 0) ; points_gbox.addWidget(self.active_points, 1, 1)
         pks_gbox = QHBoxLayout()
         pks_gbox.addWidget(self.pksbtn)
         pks_gbox.addWidget(self.threshbox)
         pks_gbox.addWidget(self.guessbtn)
-        points_gbox.addLayout(pks_gbox, 4, 0, 1, 2)
-        points_gbox.addWidget(ptsbtn, 5, 0, 1, 2)
-        points_gbox.addWidget(self.snapcheck, 6, 0, 1, 1)
-        points_gbox.addWidget(self.snapbox, 6, 1, 1, 1)
+        points_gbox.addLayout(pks_gbox, 2, 0, 1, 2)
+
+        points_gbox.addWidget(self.snapcheck, 3, 0, 1, 1)
+        points_gbox.addWidget(self.snapbox, 3, 1, 1, 1)
 
         box3.setLayout(points_gbox)
 
@@ -555,26 +557,32 @@ class GTWidget(QWidget):
                 return
             self._convert_dask(self.active_label.currentText())
 
-    def _find_peaks(self, img_filtered=None):
+    def _find_peaks(self):
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
             show_error("Image layer not defined. No peaks detected.")
             return
         
-        self._new_pts()
-        pts = self.viewer.layers[-1]
-        
-        if img_filtered is None:
-            img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
+        img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
 
-        peaks = peak_local_max(img_filtered, threshold_abs=self.thresh, min_distance=2)
-        if len(peaks) == 0:
-            show_info("No peaks found with the current threshold.")
-            return
+        thresh = self.thresh
+        @thread_worker
+        def _find_peaks_thread(img, thresh):
+             return peak_local_max(img, threshold_abs=thresh, min_distance=2)
         
-        pts.data = np.array(peaks, dtype=np.float32)
-        pts.refresh()
+        def on_done(peaks):
+            if len(peaks) == 0:
+                show_info("No peaks found with the current threshold.")
+                return
+            self._new_pts()
+            pts = self.viewer.layers[-1]    
+            pts.data = np.array(peaks, dtype=np.float32)
+            pts.refresh()
+        
+        worker = _find_peaks_thread(img_filtered, thresh)
+        worker.returned.connect(on_done)
+        worker.start()
 
     def _calc_pk_thresh(self):
         try:
@@ -586,19 +594,19 @@ class GTWidget(QWidget):
             img = img.compute()
         except:
             pass
-        img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
-        initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1, min_distance=2)
-        peak_vals = img[tuple(initial_peaks.T)]
-        self.thresh = threshold_triangle(peak_vals)
+        img_max = np.max(img, axis=0)
+        thresh = threshold_triangle(img_max)
+
+        self.thresh = thresh
         self.threshbox.setValue(self.thresh)
-        self._find_peaks(img_filtered=img_filtered)
+        self._find_peaks()
     
     def _new_pts(self):
         self.viewer.add_points(
                 ndim=3, 
                 face_color='magenta', 
                 border_color='white',
-                size=12,
+                size=15,
                 out_of_slice_display=True,
                 opacity=0.7,
                 symbol='x')
