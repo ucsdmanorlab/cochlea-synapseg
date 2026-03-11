@@ -10,7 +10,7 @@ from scipy.ndimage import gaussian_filter, distance_transform_edt, center_of_mas
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
-from skimage.filters import threshold_triangle
+from skimage.filters import threshold_triangle, threshold_multiotsu
 from napari.utils.notifications import show_error, show_info
 from qtpy.QtGui import QFontMetrics
 from napari.qt.threading import thread_worker
@@ -595,7 +595,7 @@ class GTWidget(QWidget):
         except:
             pass
         img_max = np.max(img, axis=0)
-        thresh = threshold_triangle(img_max)
+        _, thresh = threshold_multiotsu(img_max)
 
         self.thresh = thresh
         self.threshbox.setValue(self.thresh)

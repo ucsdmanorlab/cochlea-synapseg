@@ -263,6 +263,23 @@ class PreprocessWidget(QWidget):
             pts[count] = pos
             count += 1
         self.viewer.layers[self.active_points.currentText()].refresh()
+        
+    def _get_slices(self, rad_xy, rad_z, loc, shape):
+        '''
+        Get slices for a box around loc with specified radii, staying 
+        within shape bounds. 
+        '''
+        x1 = max(loc[2] - rad_xy, 0) 
+        x2 = min(loc[2] + rad_xy+1, shape[2]) 
+        y1 = max(loc[1] - rad_xy, 0) 
+        y2 = min(loc[1] + rad_xy+1, shape[1]) 
+        z1 = max(loc[0] - rad_z, 0) 
+        z2 = min(loc[0] + rad_z+1, shape[0]) 
+        relx = loc[2] - x1 
+        rely = loc[1] - y1 
+        relz = loc[0] - z1 
+        
+        return slice(z1,z2), slice(y1,y2), slice(x1,x2), [relz, rely, relx]
 
     def _convert_dask(self, layer_name):
         try:
