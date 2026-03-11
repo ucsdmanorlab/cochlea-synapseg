@@ -554,7 +554,8 @@ class GTWidget(QWidget):
             except:
                 return
             self._convert_dask(self.active_label.currentText())
-    def _find_peaks(self):
+
+    def _find_peaks(self, img_filtered=None):
         try:
             img = self.viewer.layers[self.active_image.currentText()].data
         except:
@@ -564,7 +565,9 @@ class GTWidget(QWidget):
         self._new_pts()
         pts = self.viewer.layers[-1]
         
-        img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
+        if img_filtered is None:
+            img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
+
         peaks = peak_local_max(img_filtered, threshold_abs=self.thresh, min_distance=2)
         if len(peaks) == 0:
             show_info("No peaks found with the current threshold.")
@@ -580,16 +583,15 @@ class GTWidget(QWidget):
             show_error("Image layer not defined. Cannot calculate peak threshold.")
             return
         try:
-            img.chunks
             img = img.compute()
         except:
             pass
         img_filtered = gaussian_filter(img, sigma=(0.7, 1, 1))
-        initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1)
+        initial_peaks = peak_local_max(img_filtered, threshold_rel=0.1, min_distance=2)
         peak_vals = img[tuple(initial_peaks.T)]
         self.thresh = threshold_triangle(peak_vals)
         self.threshbox.setValue(self.thresh)
-        self._find_peaks()
+        self._find_peaks(img_filtered=img_filtered)
     
     def _new_pts(self):
         self.viewer.add_points(
