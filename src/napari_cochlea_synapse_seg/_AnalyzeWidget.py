@@ -242,6 +242,8 @@ class AnalyzeWidget(QWidget):
             post_syn_int = []
             for label_id in syn_stats['label']:
                 if label_id == 0:
+                    post_syn.append(False)
+                    post_syn_int.append(0)
                     continue
                 post_syn_strict = np.any(post_syn_labels[pre_syn_labels==label_id])
                 post_syn.append(post_syn_strict)
@@ -256,7 +258,8 @@ class AnalyzeWidget(QWidget):
                     max(0, centroid_px[2]-4):centroid_px[2]+5
                 ]
                 post_syn_int.append(np.mean(local_crop))
-
+        syn_stats_df['post_synaptic'] = post_syn
+        syn_stats_df['post_synaptic_intensity'] = post_syn_int
         syn_stats_df['pre_syn_image_path'] = self.viewer.layers[self.img1_combo.currentText()].source.path if hasattr(self.viewer.layers[self.img1_combo.currentText()].source, 'path') else 'N/A'
         syn_stats_df['post_syn_image_path'] = self.viewer.layers[self.img2_combo.currentText()].source.path if hasattr(self.viewer.layers[self.img2_combo.currentText()].source, 'path') else 'N/A'
         syn_stats_df['pre_syn_seg_path'] = self.viewer.layers[self.labels_combo.currentText()].source.path if hasattr(self.viewer.layers[self.labels_combo.currentText()].source, 'path') else 'N/A'

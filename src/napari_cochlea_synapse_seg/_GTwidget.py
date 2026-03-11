@@ -1002,7 +1002,7 @@ class GTWidget(QWidget):
         Returns:
             mask_out: 3D binary mask 
         """
-        sampling = [self.z_res/self.xy_res, 1, 1]
+        sampling = [self.zres/self.xyres, 1, 1]
         dists = distance_transform_edt(mask, sampling=sampling)
         pk_idx = peak_local_max(dists, labels=mask)
         pks = np.zeros_like(dists, dtype=bool)
