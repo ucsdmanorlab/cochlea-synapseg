@@ -17,7 +17,6 @@
     "file_path_input": ""
   },
   "PredWidget": {
-    "model_path_input": "/Users/caylamiller/workspace/cochlea-synapseg/src/napari_cochlea_synapse_seg/ctbp2_sdt_3d_model",
     "zarr_path_input": "",
     "show_SDT": false,
     "show_labels": false,

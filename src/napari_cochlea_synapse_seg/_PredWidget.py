@@ -373,6 +373,9 @@ class PredWidget(QWidget):
         """
         if 'model_path_input' in settings:
             self.model_path_input.setText(settings['model_path_input'])
+        else:
+            default_model_path = os.path.join(os.path.dirname(__file__), "ctbp2_sdt_3d_model")
+            self.model_path_input.setText(default_model_path)
         if 'zarr_path_input' in settings:
             self.zarr_path_input.setText(settings['zarr_path_input'])
         if 'show_SDT' in settings:
