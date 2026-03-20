@@ -375,25 +375,28 @@ class AnalyzeWidget(QWidget):
             post_syn_layer = self.viewer.layers[self.img2_combo.currentText()]
         except KeyError:
             return
+
+        def bksub_threshold(img, type='Otsu', sigma_sm=(1,2,2), sigma_bk=(2,10,10)):
+            img = img.astype(np.float32)
+            img_filt = gaussian_filter(img, sigma=sigma_sm) - gaussian_filter(img, sigma=sigma_bk)
+            if type=='Otsu':
+                img_thresh = threshold_otsu(np.max(img_filt, axis=0))
+            elif type=='Yen':
+                img_thresh = threshold_yen(np.max(img_filt, axis=0))
+            elif type=='Li':
+                img_thresh = threshold_li(np.max(img_filt, axis=0))
+            img_map = img_filt > img_thresh 
+            labels = watershed(-img_filt, mask=img_map)
+
+            return labels
+
+        labels = bksub_threshold(
+            post_syn_layer.data, 
+            type=self.threshbox.currentText(), 
+            sigma_sm=(self.sigzbox.value(), self.sigxybox.value(), self.sigxybox.value()), 
+            sigma_bk=(self.sigzbox.value()*2, self.bkradbox.value(), self.bkradbox.value())
+        )
         
-        bk = np.zeros_like(post_syn_layer.data)
-
-        for (i, zslice) in enumerate(post_syn_layer.data):
-            bk[i] = rolling_ball(zslice, radius=self.bkradbox.value())
-
-        bk_sub = post_syn_layer.data - bk
-
-        mask = gaussian_filter(bk_sub, sigma=(self.sigzbox.value()/2, self.sigxybox.value()/2, self.sigxybox.value()/2))
-        smoothed = gaussian_filter(bk_sub, sigma=(self.sigzbox.value(), self.sigxybox.value(), self.sigxybox.value()))
-        if self.threshbox.currentText() == 'Yen':
-            thresh = threshold_yen(mask)
-        elif self.threshbox.currentText() == 'Otsu':
-            thresh = threshold_otsu(mask)
-        elif self.threshbox.currentText() == 'Li':
-            thresh = threshold_li(mask)
-        mask = mask > thresh
-
-        labels = watershed(-smoothed, mask=mask)
         self.post_syn_labels = {'bk_rad': self.bkradbox.value(),
                                 'sig_xy': self.sigxybox.value(),
                                 'sig_z': self.sigzbox.value(),
