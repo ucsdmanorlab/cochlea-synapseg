@@ -645,6 +645,7 @@ class GTWidget(QWidget):
     
     def _read_zarr_voxel_size(self, file_path):
         res = zarr.open(file_path, mode='r').attrs.get('resolution', [1., 1., 1.])
+        res = [r/1000 for r in res] # convert from nm to um
         return res
 
     def _read_tiff_voxel_size(self, file_path):
