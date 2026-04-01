@@ -3,7 +3,6 @@ import gunpowder as gp
 import numpy as np
 import os
 import torch
-from funlib.learn.torch.models import UNet, ConvPass
 from skimage.measure import label, regionprops_table
 from skimage.feature import peak_local_max
 
@@ -11,6 +10,14 @@ def predict(
     checkpoint,
     raw_file,
     raw_dataset):
+
+    try:
+        from funlib.learn.torch.models import UNet, ConvPass
+    except ImportError as exc:
+        raise ImportError(
+            "Prediction requires 'funlib.learn.torch', which is not available on PyPI. "
+            "Install it manually with: pip install git+https://github.com/funkelab/funlib.learn.torch.git"
+        ) from exc
 
     raw = gp.ArrayKey('RAW')
     pred = gp.ArrayKey('PRED')
