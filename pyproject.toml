@@ -29,7 +29,7 @@ dependencies = [
     "qtpy",
     "scikit-image",
     "scipy",
-    "zarr",
+    "zarr<3",
     "matplotlib",
     "napari[all]",
     "gunpowder",
