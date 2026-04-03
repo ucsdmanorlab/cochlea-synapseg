@@ -39,8 +39,6 @@ After installation, you can find the plugin next time you launch napari (_Plugin
 
 SynapSeg Widget includes all core functionalities. SynapSeg widget is divided into multiple tabs and sections, for "quick use", be sure to check the settings denoted with asterisks below.
 
-Montage Widget is under development and will later be rolled into the SynapSeg Widget. 
-
 Jump to: [Usage](#usage) | [Preprocess](#preprocess-tab) | [Ground Truth](#ground-truth-tab) | [Predict](#predict-tab) | [Analyze](#analyze-tab)
 
 ----------------------------------
