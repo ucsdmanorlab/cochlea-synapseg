@@ -54,8 +54,7 @@ class GTWidget(QWidget):
         _limitStretch(self.active_image)
         
         self.active_image.currentTextChanged.connect(lambda: self._read_res())
-        self.active_image.currentTextChanged.connect(lambda: self.threshbox.setMaximum(
-            int(self.viewer.layers[self.active_image.currentText()].data.max())) if self.active_image.currentText() in self.viewer.layers else None)
+        self.active_image.currentTextChanged.connect(lambda: self._update_thresh_max())
         self.active_image.currentTextChanged.connect(self.update_possible_functions)
         
         image_gbox = QVBoxLayout()
@@ -295,6 +294,18 @@ class GTWidget(QWidget):
             except (TypeError, RuntimeError, ValueError):
                 pass
             layer.events.name.connect(self.update_layer_choices)
+
+    def _update_thresh_max(self):
+        name = self.active_image.currentText()
+        if name in self.viewer.layers:
+            layer = self.viewer.layers[name]
+            try:
+                maxval = layer.data.max()
+            except:
+                # if layer is not np array, e.g. zarr, use contrast_limits_range to avoid loading into memory
+                maxval = layer.contrast_limits_range[1]
+            
+            self.threshbox.setMaximum(int(maxval))
 
     def _add_label(self):
         ''' set selected label to the next available number '''
