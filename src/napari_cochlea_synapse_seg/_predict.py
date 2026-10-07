@@ -80,7 +80,17 @@ def predict(
                     interpolatable=True,
                     voxel_size=voxel_size)
             })
-    source += gp.Pad(raw, context)
+    with gp.build(source):
+        raw_roi = source.spec[raw].roi
+
+    # Volumes smaller than one output window (e.g. few z-slices) need extra
+    # padding so Scan has a full input/output chunk to fit; cropped afterwards.
+    raw_vox = np.array(raw_roi.get_shape()) / np.array(voxel_size)
+    out_vox = np.array(output_shape)
+    extra_vox = np.maximum(0, np.ceil((out_vox - raw_vox) / 2)).astype(int)
+    extra = gp.Coordinate(tuple(int(e) for e in extra_vox)) * voxel_size
+
+    source += gp.Pad(raw, context + extra)
     source += gp.Normalize(raw)
     source += gp.Unsqueeze([raw])
 
@@ -125,4 +135,7 @@ def predict(
     with gp.build(pipeline):
         batch = pipeline.request_batch(predict_request)
 
-    return batch[pred].data
+    data = batch[pred].data
+    if extra_vox.any():
+        data = data[tuple(slice(int(e), data.shape[i] - int(e)) for i, e in enumerate(extra_vox))]
+    return data
